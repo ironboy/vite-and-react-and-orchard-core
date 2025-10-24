@@ -35,8 +35,6 @@ public static class ContentEndpoints
                 CollectContentItemIds(obj, allReferencedIds);
             }
 
-            Console.WriteLine($"Found {allReferencedIds.Count} referenced IDs");
-
             if (allReferencedIds.Count > 0)
             {
                 var referencedItems = await session
@@ -44,8 +42,6 @@ public static class ContentEndpoints
                     .For<ContentItem>()
                     .With<ContentItemIndex>(x => x.ContentItemId.IsIn(allReferencedIds))
                     .ListAsync();
-
-                Console.WriteLine($"Loaded {referencedItems.Count()} referenced items");
 
                 var refJsonString = JsonSerializer.Serialize(referencedItems, jsonOptions);
                 var plainRefItems = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(refJsonString);
@@ -67,8 +63,6 @@ public static class ContentEndpoints
                     }
                 }
             }
-
-            Console.WriteLine("Population complete");
 
             // Clean up the bullshit!
             var cleanObjects = plainObjects.Select(obj => CleanObject(obj, contentType)).ToList();
@@ -146,8 +140,8 @@ public static class ContentEndpoints
                                 }
                             }
                         }
-                        // Return single object if array has only 1 item, otherwise array
-                        return itemsList.Count == 1 ? itemsList[0] : itemsList;
+                        // Return null (serializes to remove key) if 0 items, object if one item otherwise array
+                        return itemsList.Count == 0 ? null : itemsList.Count == 1 ? itemsList[0] : itemsList;
                     }
                 }
 
