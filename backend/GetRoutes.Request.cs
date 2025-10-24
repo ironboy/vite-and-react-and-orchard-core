@@ -8,7 +8,8 @@ public static partial class GetRoutes
     // Extract existing logic into reusable method
     private static async Task<List<Dictionary<string, object>>> FetchCleanContent(
         string contentType,
-        YesSql.ISession session)
+        YesSql.ISession session,
+        bool populate = true)
     {
         var contentItems = await session
             .Query()
@@ -24,37 +25,41 @@ public static partial class GetRoutes
         var plainObjects = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(jsonString);
         if (plainObjects == null) return new List<Dictionary<string, object>>();
 
-        var allReferencedIds = new HashSet<string>();
-        foreach (var obj in plainObjects)
+        // Only populate if requested
+        if (populate)
         {
-            CollectContentItemIds(obj, allReferencedIds);
-        }
-
-        if (allReferencedIds.Count > 0)
-        {
-            var referencedItems = await session
-                .Query()
-                .For<ContentItem>()
-                .With<ContentItemIndex>(x => x.ContentItemId.IsIn(allReferencedIds))
-                .ListAsync();
-
-            var refJsonString = JsonSerializer.Serialize(referencedItems, jsonOptions);
-            var plainRefItems = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(refJsonString);
-            if (plainRefItems != null)
+            var allReferencedIds = new HashSet<string>();
+            foreach (var obj in plainObjects)
             {
-                var itemsDictionary = new Dictionary<string, Dictionary<string, JsonElement>>();
-                foreach (var item in plainRefItems)
-                {
-                    if (item.TryGetValue("ContentItemId", out var idElement))
-                    {
-                        var id = idElement.GetString();
-                        if (id != null) itemsDictionary[id] = item;
-                    }
-                }
+                CollectContentItemIds(obj, allReferencedIds);
+            }
 
-                foreach (var obj in plainObjects)
+            if (allReferencedIds.Count > 0)
+            {
+                var referencedItems = await session
+                    .Query()
+                    .For<ContentItem>()
+                    .With<ContentItemIndex>(x => x.ContentItemId.IsIn(allReferencedIds))
+                    .ListAsync();
+
+                var refJsonString = JsonSerializer.Serialize(referencedItems, jsonOptions);
+                var plainRefItems = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(refJsonString);
+                if (plainRefItems != null)
                 {
-                    PopulateContentItemIds(obj, itemsDictionary);
+                    var itemsDictionary = new Dictionary<string, Dictionary<string, JsonElement>>();
+                    foreach (var item in plainRefItems)
+                    {
+                        if (item.TryGetValue("ContentItemId", out var idElement))
+                        {
+                            var id = idElement.GetString();
+                            if (id != null) itemsDictionary[id] = item;
+                        }
+                    }
+
+                    foreach (var obj in plainObjects)
+                    {
+                        PopulateContentItemIds(obj, itemsDictionary);
+                    }
                 }
             }
         }

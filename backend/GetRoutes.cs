@@ -12,15 +12,15 @@ public static partial class GetRoutes
 {
     public static void MapGetRoutes(this WebApplication app)
     {
-        // Get single item by ID
-        app.MapGet("api/content/{contentType}/{id}", async (
+        // Get single item by ID (with population)
+        app.MapGet("api/expand/{contentType}/{id}", async (
             string contentType,
             string id,
             [FromServices] YesSql.ISession session,
             HttpContext context) =>
         {
             // Get clean populated data
-            var cleanObjects = await FetchCleanContent(contentType, session);
+            var cleanObjects = await FetchCleanContent(contentType, session, populate: true);
 
             // Find the item with matching id
             var item = cleanObjects.FirstOrDefault(obj => obj.ContainsKey("id") && obj["id"]?.ToString() == id);
@@ -36,14 +36,53 @@ public static partial class GetRoutes
             return Results.Json(item);
         });
 
-        // Get all items (with optional filters)
-        app.MapGet("api/content/{contentType}", async (
+        // Get all items with population (with optional filters)
+        app.MapGet("api/expand/{contentType}", async (
             string contentType,
             [FromServices] YesSql.ISession session,
             HttpContext context) =>
         {
             // Get clean populated data
-            var cleanObjects = await FetchCleanContent(contentType, session);
+            var cleanObjects = await FetchCleanContent(contentType, session, populate: true);
+
+            // Apply query filters
+            var filteredData = ApplyQueryFilters(context.Request.Query, cleanObjects);
+
+            return Results.Json(filteredData);
+        });
+
+        // Get single item by ID (without population)
+        app.MapGet("api/{contentType}/{id}", async (
+            string contentType,
+            string id,
+            [FromServices] YesSql.ISession session,
+            HttpContext context) =>
+        {
+            // Get clean data without population
+            var cleanObjects = await FetchCleanContent(contentType, session, populate: false);
+
+            // Find the item with matching id
+            var item = cleanObjects.FirstOrDefault(obj => obj.ContainsKey("id") && obj["id"]?.ToString() == id);
+
+            if (item == null)
+            {
+                context.Response.StatusCode = 404;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("null");
+                return Results.Empty;
+            }
+
+            return Results.Json(item);
+        });
+
+        // Get all items without population (with optional filters)
+        app.MapGet("api/{contentType}", async (
+            string contentType,
+            [FromServices] YesSql.ISession session,
+            HttpContext context) =>
+        {
+            // Get clean data without population
+            var cleanObjects = await FetchCleanContent(contentType, session, populate: false);
 
             // Apply query filters
             var filteredData = ApplyQueryFilters(context.Request.Query, cleanObjects);
