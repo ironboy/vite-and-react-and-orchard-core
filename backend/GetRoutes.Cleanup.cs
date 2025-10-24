@@ -52,7 +52,22 @@ public static partial class GetRoutes
                 // Check for Text field
                 if (dict.ContainsKey("Text") && dict.Count == 1)
                 {
-                    return (dict["Text"].GetString(), false);
+                    var textElement = dict["Text"];
+                    // Handle both string and array (in case of POST-created items)
+                    if (textElement.ValueKind == JsonValueKind.String)
+                    {
+                        return (textElement.GetString(), false);
+                    }
+                    else if (textElement.ValueKind == JsonValueKind.Array)
+                    {
+                        // If it's an array, try to get the first element
+                        var arr = textElement.EnumerateArray().ToList();
+                        if (arr.Count > 0 && arr[0].ValueKind == JsonValueKind.String)
+                        {
+                            return (arr[0].GetString(), false);
+                        }
+                    }
+                    return (null, false);
                 }
 
                 // Check for ContentItemIds array (non-populated relations)

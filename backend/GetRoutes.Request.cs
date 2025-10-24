@@ -6,7 +6,7 @@ using System.Text.Json;
 public static partial class GetRoutes
 {
     // Extract existing logic into reusable method
-    private static async Task<List<Dictionary<string, object>>> FetchCleanContent(
+    public static async Task<List<Dictionary<string, object>>> FetchCleanContent(
         string contentType,
         YesSql.ISession session,
         bool populate = true)

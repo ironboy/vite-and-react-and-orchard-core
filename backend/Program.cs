@@ -18,6 +18,9 @@ if (!app.Environment.IsDevelopment())
 // our mods
 app.MapAuthEndpoints();
 app.MapGetRoutes();
+app.MapPostRoutes();
+app.MapPutRoutes();
+app.MapDeleteRoutes();
 
 app.UseStaticFiles();
 

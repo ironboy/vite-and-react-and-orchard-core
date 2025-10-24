@@ -12,6 +12,28 @@ public static partial class GetRoutes
 {
     public static void MapGetRoutes(this WebApplication app)
     {
+        // DEBUG: Raw JSON from database
+        app.MapGet("api/debug/{contentType}/{id}", async (
+            string contentType,
+            string id,
+            [FromServices] YesSql.ISession session) =>
+        {
+            var contentItems = await session
+                .Query()
+                .For<ContentItem>()
+                .With<ContentItemIndex>(x => x.ContentType == contentType && x.ContentItemId == id && x.Published)
+                .ListAsync();
+
+            var jsonOptions = new JsonSerializerOptions
+            {
+                ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
+            };
+            var jsonString = JsonSerializer.Serialize(contentItems, jsonOptions);
+
+            return Results.Content(jsonString, "application/json");
+        });
+
+
         // Get single item by ID (with population)
         app.MapGet("api/expand/{contentType}/{id}", async (
             string contentType,
