@@ -15,7 +15,9 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+// our mods
 app.MapAuthEndpoints();
+app.MapContentEndpoints();
 
 app.UseStaticFiles();
 
