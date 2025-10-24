@@ -17,7 +17,7 @@ if (!app.Environment.IsDevelopment())
 
 // our mods
 app.MapAuthEndpoints();
-app.MapContentEndpoints();
+app.MapGetRoutes();
 
 app.UseStaticFiles();
 
