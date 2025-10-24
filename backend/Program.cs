@@ -1,5 +1,5 @@
 using OrchardCore.Logging;
-using backend;
+using RestRoutes;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,11 +16,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 // our mods
-app.MapAuthEndpoints();
-app.MapGetRoutes();
-app.MapPostRoutes();
-app.MapPutRoutes();
-app.MapDeleteRoutes();
+app.MapRestRoutes();
 
 app.UseStaticFiles();
 

@@ -1,3 +1,5 @@
+namespace RestRoutes;
+
 using System.Text.RegularExpressions;
 
 public static partial class GetRoutes

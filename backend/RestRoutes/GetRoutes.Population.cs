@@ -1,3 +1,5 @@
+namespace RestRoutes;
+
 using System.Text.Json;
 
 public static partial class GetRoutes

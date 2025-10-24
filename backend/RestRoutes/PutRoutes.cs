@@ -1,3 +1,5 @@
+namespace RestRoutes;
+
 using OrchardCore.ContentManagement;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
@@ -26,13 +28,21 @@ public static class PutRoutes
         app.MapPut("api/{contentType}/{id}", async (
             string contentType,
             string id,
-            [FromBody] Dictionary<string, object> body,
+            [FromBody] Dictionary<string, object>? body,
             [FromServices] IContentManager contentManager,
             [FromServices] YesSql.ISession session,
             HttpContext context) =>
         {
             try
             {
+                // Check if body is null or empty
+                if (body == null || body.Count == 0)
+                {
+                    return Results.Json(new {
+                        error = "Cannot read request body"
+                    }, statusCode: 400);
+                }
+
                 // Get the existing content item
                 var contentItem = await contentManager.GetAsync(id, VersionOptions.Published);
 

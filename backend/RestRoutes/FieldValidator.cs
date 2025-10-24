@@ -1,3 +1,5 @@
+namespace RestRoutes;
+
 using OrchardCore.ContentManagement;
 using YesSql.Services;
 

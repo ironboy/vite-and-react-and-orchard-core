@@ -1,3 +1,5 @@
+namespace RestRoutes;
+
 using OrchardCore.ContentManagement;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
@@ -25,13 +27,21 @@ public static class PostRoutes
     {
         app.MapPost("api/{contentType}", async (
             string contentType,
-            [FromBody] Dictionary<string, object> body,
+            [FromBody] Dictionary<string, object>? body,
             [FromServices] IContentManager contentManager,
             [FromServices] YesSql.ISession session,
             HttpContext context) =>
         {
             try
             {
+                // Check if body is null or empty
+                if (body == null || body.Count == 0)
+                {
+                    return Results.Json(new {
+                        error = "Cannot read request body"
+                    }, statusCode: 400);
+                }
+
                 // Validate fields
                 var validFields = await FieldValidator.GetValidFieldsAsync(contentType, contentManager, session);
                 var (isValid, invalidFields) = FieldValidator.ValidateFields(body, validFields, RESERVED_FIELDS);

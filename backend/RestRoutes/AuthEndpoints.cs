@@ -1,3 +1,5 @@
+namespace RestRoutes;
+
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using OrchardCore.Users;
@@ -5,8 +7,6 @@ using OrchardCore.Users.Models;
 using OrchardCore.Users.Services;
 using System.Text.Json.Nodes;
 using System.Security.Claims;
-
-namespace backend;
 
 public static class AuthEndpoints
 {
