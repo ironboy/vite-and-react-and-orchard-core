@@ -91,5 +91,45 @@ public static partial class GetRoutes
 
             return Results.Json(filteredData);
         });
+
+        // Get single raw item by ID (no cleanup, no population)
+        app.MapGet("api/raw/{contentType}/{id}", async (
+            string contentType,
+            string id,
+            [FromServices] YesSql.ISession session,
+            HttpContext context) =>
+        {
+            // Get raw data
+            var rawObjects = await FetchRawContent(contentType, session);
+
+            // Find the item with matching ContentItemId
+            var item = rawObjects.FirstOrDefault(obj =>
+                obj.ContainsKey("ContentItemId") && obj["ContentItemId"]?.ToString() == id);
+
+            if (item == null)
+            {
+                context.Response.StatusCode = 404;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("null");
+                return Results.Empty;
+            }
+
+            return Results.Json(item);
+        });
+
+        // Get all raw items (no cleanup, no population, but with filters)
+        app.MapGet("api/raw/{contentType}", async (
+            string contentType,
+            [FromServices] YesSql.ISession session,
+            HttpContext context) =>
+        {
+            // Get raw data
+            var rawObjects = await FetchRawContent(contentType, session);
+
+            // Apply query filters (filtering works on raw data too)
+            var filteredData = ApplyQueryFilters(context.Request.Query, rawObjects);
+
+            return Results.Json(filteredData);
+        });
     }
 }

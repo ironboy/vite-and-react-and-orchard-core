@@ -70,4 +70,72 @@ public static partial class GetRoutes
         var cleanObjects = plainObjects.Select(obj => CleanObject(obj, contentType)).ToList();
         return cleanObjects;
     }
+
+    // Fetch raw content without cleanup (for debugging/edge cases)
+    public static async Task<List<Dictionary<string, object>>> FetchRawContent(
+        string contentType,
+        YesSql.ISession session)
+    {
+        var contentItems = await session
+            .Query()
+            .For<ContentItem>()
+            .With<ContentItemIndex>(x => x.ContentType == contentType && x.Published)
+            .ListAsync();
+
+        var jsonOptions = new JsonSerializerOptions
+        {
+            ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
+        };
+        var jsonString = JsonSerializer.Serialize(contentItems, jsonOptions);
+
+        // Deserialize to JsonElement first, then convert to object
+        var jsonDoc = JsonDocument.Parse(jsonString);
+        var rawObjects = new List<Dictionary<string, object>>();
+
+        foreach (var element in jsonDoc.RootElement.EnumerateArray())
+        {
+            rawObjects.Add(JsonElementToDictionary(element));
+        }
+
+        return rawObjects;
+    }
+
+    private static Dictionary<string, object> JsonElementToDictionary(JsonElement element)
+    {
+        var dict = new Dictionary<string, object>();
+
+        foreach (var property in element.EnumerateObject())
+        {
+            dict[property.Name] = JsonElementToObject(property.Value);
+        }
+
+        return dict;
+    }
+
+    private static object JsonElementToObject(JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                return JsonElementToDictionary(element);
+            case JsonValueKind.Array:
+                var list = new List<object>();
+                foreach (var item in element.EnumerateArray())
+                {
+                    list.Add(JsonElementToObject(item));
+                }
+                return list;
+            case JsonValueKind.String:
+                return element.GetString() ?? "";
+            case JsonValueKind.Number:
+                return element.GetDouble();
+            case JsonValueKind.True:
+            case JsonValueKind.False:
+                return element.GetBoolean();
+            case JsonValueKind.Null:
+                return null!;
+            default:
+                return element.ToString();
+        }
+    }
 }
