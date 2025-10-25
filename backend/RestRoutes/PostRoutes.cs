@@ -98,6 +98,21 @@ public static class PostRoutes
                         {
                             contentItem.Content[contentType][pascalKey]["Text"] = jsonElement.GetString();
                         }
+                        else if (jsonElement.ValueKind == JsonValueKind.Array)
+                        {
+                            // Handle arrays - wrap in {"Values": [...]} pattern (capital V!)
+                            // Use List<string> (Orchard's Content property doesn't handle JArray correctly)
+                            var arrayData = new List<string>();
+                            foreach (var item in jsonElement.EnumerateArray())
+                            {
+                                if (item.ValueKind == JsonValueKind.String)
+                                {
+                                    var str = item.GetString();
+                                    if (str != null) arrayData.Add(str);
+                                }
+                            }
+                            contentItem.Content[contentType][pascalKey]["Values"] = arrayData;
+                        }
                         else
                         {
                             contentItem.Content[contentType][pascalKey] = ConvertJsonElement(jsonElement);
@@ -152,6 +167,24 @@ public static class PostRoutes
         else if (element.ValueKind == JsonValueKind.True || element.ValueKind == JsonValueKind.False)
         {
             return new JObject { ["Value"] = element.GetBoolean() };
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            // Wrap arrays in {"values": [...]} pattern for Orchard Core list fields
+            var arrayValues = new JArray();
+            foreach (var item in element.EnumerateArray())
+            {
+                // Convert each item to appropriate JToken
+                if (item.ValueKind == JsonValueKind.String)
+                    arrayValues.Add(item.GetString());
+                else if (item.ValueKind == JsonValueKind.Number)
+                    arrayValues.Add(item.GetDouble());
+                else if (item.ValueKind == JsonValueKind.True || item.ValueKind == JsonValueKind.False)
+                    arrayValues.Add(item.GetBoolean());
+                else
+                    arrayValues.Add(JToken.Parse(item.GetRawText()));
+            }
+            return new JObject { ["values"] = arrayValues };
         }
 
         // For complex types, just wrap as-is

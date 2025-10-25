@@ -122,6 +122,26 @@ public static partial class GetRoutes
                     }
                 }
 
+                // Check for { "values": [...] } pattern (common in OrchardCore list fields)
+                if (dict.Count == 1 && (dict.ContainsKey("values") || dict.ContainsKey("Values")))
+                {
+                    var valuesKey = dict.ContainsKey("values") ? "values" : "Values";
+                    var values = dict[valuesKey];
+                    if (values.ValueKind == JsonValueKind.Array)
+                    {
+                        var valuesList = new List<object>();
+                        foreach (var val in values.EnumerateArray())
+                        {
+                            var extractedValue = ExtractFieldValue(val);
+                            if (extractedValue != null)
+                            {
+                                valuesList.Add(extractedValue);
+                            }
+                        }
+                        return (valuesList, false);
+                    }
+                }
+
                 // Otherwise return the whole object cleaned
                 var cleaned = new Dictionary<string, object>();
                 foreach (var kvp in dict)
