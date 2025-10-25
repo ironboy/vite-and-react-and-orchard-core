@@ -10,7 +10,7 @@ let raw = [
       "Pet",
       "PetOwner"
     ],
-    "restMethod": [
+    "restMethods": [
       "GET"
     ]
   },
@@ -24,7 +24,7 @@ let raw = [
     "contentTypes": [
       "Pet"
     ],
-    "restMethod": [
+    "restMethods": [
       "POST",
       "PUT",
       "DELETE"
@@ -36,7 +36,7 @@ let raw = [
 // sum raw data - in c# probably easiest to do using Dyndatas Obj feature
 let permissionsByRole = {};
 
-for (let { roles, contentTypes, restMethod: restMethods } of raw) {
+for (let { roles, contentTypes, restMethods } of raw) {
   for (let role of roles) {
     permissionsByRole[role] = permissionsByRole[role] || {};
     for (let contentType of contentTypes) {

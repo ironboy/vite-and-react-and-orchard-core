@@ -21,6 +21,10 @@ public static partial class GetRoutes
             [FromServices] YesSql.ISession session,
             HttpContext context) =>
         {
+            // Check permissions
+            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            if (permissionCheck != null) return permissionCheck;
+
             // Get clean populated data
             var cleanObjects = await FetchCleanContent(contentType, session, populate: true);
 
@@ -44,6 +48,10 @@ public static partial class GetRoutes
             [FromServices] YesSql.ISession session,
             HttpContext context) =>
         {
+            // Check permissions
+            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            if (permissionCheck != null) return permissionCheck;
+
             // Get clean populated data
             var cleanObjects = await FetchCleanContent(contentType, session, populate: true);
 
@@ -60,6 +68,10 @@ public static partial class GetRoutes
             [FromServices] YesSql.ISession session,
             HttpContext context) =>
         {
+            // Check permissions
+            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            if (permissionCheck != null) return permissionCheck;
+
             // Get clean data without population
             var cleanObjects = await FetchCleanContent(contentType, session, populate: false);
 
@@ -83,6 +95,10 @@ public static partial class GetRoutes
             [FromServices] YesSql.ISession session,
             HttpContext context) =>
         {
+            // Check permissions
+            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            if (permissionCheck != null) return permissionCheck;
+
             // Get clean data without population
             var cleanObjects = await FetchCleanContent(contentType, session, populate: false);
 
@@ -99,6 +115,10 @@ public static partial class GetRoutes
             [FromServices] YesSql.ISession session,
             HttpContext context) =>
         {
+            // Check permissions
+            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            if (permissionCheck != null) return permissionCheck;
+
             // Get raw data
             var rawObjects = await FetchRawContent(contentType, session);
 
@@ -123,6 +143,10 @@ public static partial class GetRoutes
             [FromServices] YesSql.ISession session,
             HttpContext context) =>
         {
+            // Check permissions
+            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            if (permissionCheck != null) return permissionCheck;
+
             // Get raw data
             var rawObjects = await FetchRawContent(contentType, session);
 

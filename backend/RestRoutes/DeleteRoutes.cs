@@ -16,6 +16,10 @@ public static class DeleteRoutes
         {
             try
             {
+                // Check permissions
+                var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "DELETE", context, session);
+                if (permissionCheck != null) return permissionCheck;
+
                 // Get the existing content item
                 var contentItem = await contentManager.GetAsync(id, VersionOptions.Published);
 

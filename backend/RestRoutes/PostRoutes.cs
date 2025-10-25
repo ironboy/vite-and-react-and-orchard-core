@@ -34,6 +34,10 @@ public static class PostRoutes
         {
             try
             {
+                // Check permissions
+                var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "POST", context, session);
+                if (permissionCheck != null) return permissionCheck;
+
                 // Check if body is null or empty
                 if (body == null || body.Count == 0)
                 {
