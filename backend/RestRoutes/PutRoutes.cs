@@ -36,7 +36,7 @@ public static class PutRoutes
             try
             {
                 // Check permissions
-                var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "PUT", context, session);
+                var permissionCheck = await PermissionsACL.CheckPermissions(contentType, "PUT", context, session);
                 if (permissionCheck != null) return permissionCheck;
 
                 // Check if body is null or empty

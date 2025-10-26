@@ -2,7 +2,7 @@ namespace RestRoutes;
 
 using System.Security.Claims;
 
-public static class PermissionsMiddleware
+public static class PermissionsACL
 {
     public static async Task<IResult?> CheckPermissions(
         string contentType,
@@ -22,39 +22,44 @@ public static class PermissionsMiddleware
         {
             if (permission == null) continue;
 
-            // Safely convert to lists, handling various collection types
-            var rolesValue = permission.GetValueOrDefault("roles");
-            var roles = new List<string>();
-            if (rolesValue is IEnumerable<object> enumRoles)
+            // Helper function to convert comma-separated strings or text field dictionaries to list
+            // Handles both: new TextField format (plain string) and old MultiTextField format (dictionary)
+            static List<string> ConvertCommaSeparatedToList(object? value)
             {
-                foreach (var r in enumRoles)
+                if (value == null) return [];
+
+                // OLD FORMAT: Dictionary with "text" property (ghosted from old MultiTextField)
+                if (value is Dictionary<string, object> dict && dict.ContainsKey("text"))
                 {
-                    var roleStr = r?.ToString();
-                    if (!string.IsNullOrEmpty(roleStr)) roles.Add(roleStr);
+                    value = dict["text"];
                 }
+
+                // NEW FORMAT: Plain string (clean TextField)
+                if (value is not string strValue) return [];
+
+                return strValue
+                    .Split(',')
+                    .Select(s => s.Trim())
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .ToList();
             }
 
-            var contentTypesValue = permission.GetValueOrDefault("contentTypes");
-            var contentTypes = new List<string>();
-            if (contentTypesValue is IEnumerable<object> enumCT)
+            // Helper function to convert arrays/enumerables to list
+            static List<string> ConvertArrayToList(object? value)
             {
-                foreach (var ct in enumCT)
-                {
-                    var ctStr = ct?.ToString();
-                    if (!string.IsNullOrEmpty(ctStr)) contentTypes.Add(ctStr);
-                }
+                if (value == null) return [];
+                if (value is not IEnumerable<object> enumValue) return [];
+
+                return enumValue
+                    .Select(v => v?.ToString()?.Trim())
+                    .Where(s => !string.IsNullOrEmpty(s))
+                    .Cast<string>()
+                    .ToList();
             }
 
-            var restMethodsValue = permission.GetValueOrDefault("restMethods");
-            var restMethods = new List<string>();
-            if (restMethodsValue is IEnumerable<object> enumRM)
-            {
-                foreach (var rm in enumRM)
-                {
-                    var rmStr = rm?.ToString();
-                    if (!string.IsNullOrEmpty(rmStr)) restMethods.Add(rmStr);
-                }
-            }
+            var roles = ConvertCommaSeparatedToList(permission.GetValueOrDefault("roles"));
+            var contentTypes = ConvertCommaSeparatedToList(permission.GetValueOrDefault("contentTypes"));
+            var restMethods = ConvertArrayToList(permission.GetValueOrDefault("restMethods"));
 
             foreach (var role in roles)
             {

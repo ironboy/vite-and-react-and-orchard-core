@@ -6,7 +6,11 @@ public static class SetupRoutes
     {
         app.UseRestRoutesExceptionHandler();
 
+        // Inject script into admin pages
+        app.UseMiddleware<AdminScriptInjectorMiddleware>();
+
         app.MapAuthEndpoints();
+        app.MapSystemRoutes();
         app.MapGetRoutes();
         app.MapPostRoutes();
         app.MapPutRoutes();

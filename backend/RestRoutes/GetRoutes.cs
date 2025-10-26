@@ -22,7 +22,7 @@ public static partial class GetRoutes
             HttpContext context) =>
         {
             // Check permissions
-            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            var permissionCheck = await PermissionsACL.CheckPermissions(contentType, "GET", context, session);
             if (permissionCheck != null) return permissionCheck;
 
             // Get clean populated data
@@ -49,7 +49,7 @@ public static partial class GetRoutes
             HttpContext context) =>
         {
             // Check permissions
-            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            var permissionCheck = await PermissionsACL.CheckPermissions(contentType, "GET", context, session);
             if (permissionCheck != null) return permissionCheck;
 
             // Get clean populated data
@@ -69,7 +69,7 @@ public static partial class GetRoutes
             HttpContext context) =>
         {
             // Check permissions
-            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            var permissionCheck = await PermissionsACL.CheckPermissions(contentType, "GET", context, session);
             if (permissionCheck != null) return permissionCheck;
 
             // Get clean data without population
@@ -96,7 +96,7 @@ public static partial class GetRoutes
             HttpContext context) =>
         {
             // Check permissions
-            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            var permissionCheck = await PermissionsACL.CheckPermissions(contentType, "GET", context, session);
             if (permissionCheck != null) return permissionCheck;
 
             // Get clean data without population
@@ -116,7 +116,7 @@ public static partial class GetRoutes
             HttpContext context) =>
         {
             // Check permissions
-            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            var permissionCheck = await PermissionsACL.CheckPermissions(contentType, "GET", context, session);
             if (permissionCheck != null) return permissionCheck;
 
             // Get raw data
@@ -144,7 +144,7 @@ public static partial class GetRoutes
             HttpContext context) =>
         {
             // Check permissions
-            var permissionCheck = await PermissionsMiddleware.CheckPermissions(contentType, "GET", context, session);
+            var permissionCheck = await PermissionsACL.CheckPermissions(contentType, "GET", context, session);
             if (permissionCheck != null) return permissionCheck;
 
             // Get raw data
