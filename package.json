@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "backend": "cd backend && dotnet run --urls http://localhost:5001",
+    "save": "node scripts/save-seed.js",
+    "restore": "node scripts/restore-seed.js",
+    "backend": "node scripts/ensure-setup.js && cd backend && dotnet run --urls http://localhost:5001",
     "start": "concurrently \"npm run backend\" \"npm run dev\""
   },
   "dependencies": {
