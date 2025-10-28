@@ -122,8 +122,7 @@ public static class PostRoutes
                         }
                         else if (jsonElement.ValueKind == JsonValueKind.Array)
                         {
-                            // Handle arrays - wrap in {"Values": [...]} pattern (capital V!)
-                            // Use List<string> (Orchard's Content property doesn't handle JArray correctly)
+                            // Handle arrays - could be ContentItemIds or Values
                             var arrayData = new List<string>();
                             foreach (var item in jsonElement.EnumerateArray())
                             {
@@ -133,7 +132,19 @@ public static class PostRoutes
                                     if (str != null) arrayData.Add(str);
                                 }
                             }
-                            contentItem.Content[contentType][pascalKey]["Values"] = arrayData;
+
+                            // Detect if array contains ContentItemIds (26-char alphanumeric strings)
+                            var isContentItemIds = arrayData.Count > 0 &&
+                                arrayData.All(id => id.Length > 20 && id.All(c => char.IsLetterOrDigit(c)));
+
+                            if (isContentItemIds)
+                            {
+                                contentItem.Content[contentType][pascalKey]["ContentItemIds"] = arrayData;
+                            }
+                            else
+                            {
+                                contentItem.Content[contentType][pascalKey]["Values"] = arrayData;
+                            }
                         }
                         else
                         {
