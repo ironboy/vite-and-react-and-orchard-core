@@ -193,6 +193,20 @@ Content-Type: application/json
 }
 ```
 
+**Supported Field Types:**
+
+When creating or updating content, use the **same format** you receive from `GET /api/{contentType}` (not the raw format from `/api/raw/{contentType}`). The API automatically unwraps single-property fields for cleaner JSON:
+
+- **TextField** - Plain string: `"species": "dog"`
+- **NumericField** - Plain number: `"age": 5`
+- **BooleanField** - Plain boolean: `"isActive": true`
+- **DateField** - ISO 8601 string: `"birthDate": "2020-01-15T00:00:00Z"`
+- **DateTimeField** - ISO 8601 string: `"createdAt": "2025-10-28T10:30:00Z"`
+- **HtmlField** - Plain HTML string: `"description": "<p>A friendly dog</p>"`
+- **MarkdownField** - Plain markdown string: `"bio": "# Fido\nA good boy"`
+
+Multi-property fields (like LinkField and MediaField) are best created through the admin UI.
+
 #### Update Pet
 
 ```bash
@@ -212,6 +226,8 @@ Content-Type: application/json
   "title": "Buddy Updated"
 }
 ```
+
+**Note:** PUT accepts the same field format as POST (see Supported Field Types above).
 
 #### Delete Pet
 

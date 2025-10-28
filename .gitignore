@@ -52,6 +52,9 @@ backend/App_Data/
 # But keep the seed data committed to git
 !backend/App_Data.seed/
 
+# Ignore ImageSharp cache and other wwwroot runtime files
+backend/wwwroot/Default/
+
 # Other Orchard ignores
 App_Data_Sites/
 Localization/

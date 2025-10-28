@@ -107,6 +107,24 @@ public static class PutRoutes
                         {
                             contentItem.Content[contentType][pascalKey]["Text"] = jsonElement.GetString();
                         }
+                        else if (jsonElement.ValueKind == JsonValueKind.Number)
+                        {
+                            contentItem.Content[contentType][pascalKey]["Value"] = jsonElement.GetDouble();
+                        }
+                        else if (jsonElement.ValueKind == JsonValueKind.True || jsonElement.ValueKind == JsonValueKind.False)
+                        {
+                            contentItem.Content[contentType][pascalKey]["Value"] = jsonElement.GetBoolean();
+                        }
+                        else if (jsonElement.ValueKind == JsonValueKind.Object)
+                        {
+                            // Handle objects - convert keys to PascalCase
+                            var obj = new JObject();
+                            foreach (var prop in jsonElement.EnumerateObject())
+                            {
+                                obj[ToPascalCase(prop.Name)] = ConvertJsonElementToPascal(prop.Value);
+                            }
+                            contentItem.Content[contentType][pascalKey] = obj;
+                        }
                         else if (jsonElement.ValueKind == JsonValueKind.Array)
                         {
                             // Handle arrays - wrap in {"Values": [...]} pattern (capital V!)
@@ -199,5 +217,41 @@ public static class PutRoutes
 
         // For complex types, just wrap as-is
         return new JObject { ["Text"] = element.ToString() };
+    }
+
+    private static JToken ConvertJsonElementToPascal(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            return JToken.FromObject(element.GetString()!);
+        }
+        else if (element.ValueKind == JsonValueKind.Number)
+        {
+            return JToken.FromObject(element.GetDouble());
+        }
+        else if (element.ValueKind == JsonValueKind.True || element.ValueKind == JsonValueKind.False)
+        {
+            return JToken.FromObject(element.GetBoolean());
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            var arr = new JArray();
+            foreach (var item in element.EnumerateArray())
+            {
+                arr.Add(ConvertJsonElementToPascal(item));
+            }
+            return arr;
+        }
+        else if (element.ValueKind == JsonValueKind.Object)
+        {
+            var obj = new JObject();
+            foreach (var prop in element.EnumerateObject())
+            {
+                obj[ToPascalCase(prop.Name)] = ConvertJsonElementToPascal(prop.Value);
+            }
+            return obj;
+        }
+
+        return JToken.Parse(element.GetRawText());
     }
 }

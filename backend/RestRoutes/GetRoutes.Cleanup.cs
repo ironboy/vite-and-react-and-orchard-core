@@ -152,6 +152,13 @@ public static partial class GetRoutes
                         cleaned[ToCamelCase(kvp.Key)] = value;
                     }
                 }
+
+                // Unwrap single-property objects (e.g., {"value": 42} → 42)
+                if (cleaned.Count == 1)
+                {
+                    return (cleaned.Values.First(), false);
+                }
+
                 return (cleaned, false);
             }
         }
@@ -257,6 +264,13 @@ public static partial class GetRoutes
                         cleaned[ToCamelCase(kvp.Key)] = value;
                     }
                 }
+
+                // Unwrap single-property objects (e.g., {"value": 42} → 42)
+                if (cleaned.Count == 1)
+                {
+                    return cleaned.Values.First();
+                }
+
                 return cleaned;
             }
         }
