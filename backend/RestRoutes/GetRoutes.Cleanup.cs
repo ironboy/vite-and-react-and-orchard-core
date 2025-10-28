@@ -87,8 +87,17 @@ public static partial class GetRoutes
                                 if (idStr != null) idsList.Add(idStr);
                             }
                         }
-                        // Return single ID string if exactly one item, with isIdReference = true
-                        return idsList.Count == 1 ? (idsList[0], true) : (null, false);
+                        // Single ID: return as string with isIdReference=true (appends "Id" to field name)
+                        // Multiple IDs: return as array with isIdReference=false (keeps field name as-is)
+                        if (idsList.Count == 1)
+                        {
+                            return (idsList[0], true);
+                        }
+                        else if (idsList.Count > 1)
+                        {
+                            return (idsList.ToArray(), false);
+                        }
+                        return (null, false); // Empty array
                     }
                 }
 
@@ -220,8 +229,16 @@ public static partial class GetRoutes
                                 if (idStr != null) idsList.Add(idStr);
                             }
                         }
-                        // Return single ID string if exactly one item, otherwise null
-                        return idsList.Count == 1 ? idsList[0] : null;
+                        // Return single ID string if exactly one item, array for multiple items
+                        if (idsList.Count == 1)
+                        {
+                            return idsList[0];
+                        }
+                        else if (idsList.Count > 1)
+                        {
+                            return idsList.ToArray();
+                        }
+                        return null; // Empty array
                     }
                 }
 
