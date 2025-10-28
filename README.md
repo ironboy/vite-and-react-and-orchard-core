@@ -599,34 +599,7 @@ for /f "tokens=5" %a in ('netstat -aon ^| find ":5001" ^| find "LISTENING"') do 
 ```
 
 ### Database Issues
-Reset to a clean state:
+Reset to a clean (initial / last saved) state:
 ```bash
 npm run restore
 ```
-
-### Authentication Not Working
-Make sure you're including credentials in fetch requests:
-```javascript
-fetch('http://localhost:5001/api/Pet', {
-  credentials: 'include'  // Include session cookie
-})
-```
-
-## API Examples with cURL
-
-### Login and Make Authenticated Request
-```bash
-# 1. Login and save cookies
-curl -X POST http://localhost:5001/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"Password123!"}' \
-  -c cookies.txt
-
-# 2. Make authenticated request
-curl http://localhost:5001/api/Pet \
-  -b cookies.txt
-```
-
-## License
-
-MIT
