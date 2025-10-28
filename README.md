@@ -10,6 +10,9 @@ A full-stack application combining a modern React frontend (Vite + TypeScript) w
 - 📦 **Seed System** - Database seeding for easy project setup and reset
 - ⚡ **REST API** - Full CRUD operations with relationship expansion, filtering, sorting, and pagination
 
+# Important
+The admin user name is "tom" with the password "Abcd1234!"
+
 ## Quick Start
 
 1. **Install dependencies**
