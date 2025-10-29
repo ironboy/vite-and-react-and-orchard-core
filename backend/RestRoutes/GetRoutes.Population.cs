@@ -19,6 +19,12 @@ public static partial class GetRoutes
                     }
                 }
             }
+            // Also collect from singular ID fields (e.g., "ingredientId"), but skip "id" and "ContentItemId"
+            else if (kvp.Key != "id" && kvp.Key != "ContentItemId" && kvp.Key.EndsWith("Id") && kvp.Value.ValueKind == JsonValueKind.String)
+            {
+                var idStr = kvp.Value.GetString();
+                if (idStr != null) ids.Add(idStr);
+            }
             else if (kvp.Value.ValueKind == JsonValueKind.Object)
             {
                 var nested = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(kvp.Value.GetRawText());
@@ -65,6 +71,18 @@ public static partial class GetRoutes
 
                 obj["Items"] = JsonSerializer.SerializeToElement(items);
                 obj.Remove("ContentItemIds");
+            }
+            // Handle singular ID fields (e.g., "ingredientId" -> "ingredient"), but skip "id" and "ContentItemId"
+            else if (key != "id" && key != "ContentItemId" && key.EndsWith("Id") && value.ValueKind == JsonValueKind.String)
+            {
+                var idStr = value.GetString();
+                if (idStr != null && itemsDictionary.TryGetValue(idStr, out var item))
+                {
+                    // Remove "Id" suffix from key name
+                    var newKey = key.Substring(0, key.Length - 2);
+                    obj[newKey] = JsonSerializer.SerializeToElement(item);
+                    obj.Remove(key);
+                }
             }
             else if (value.ValueKind == JsonValueKind.Object)
             {
