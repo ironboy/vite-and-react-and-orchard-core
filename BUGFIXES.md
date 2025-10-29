@@ -75,3 +75,65 @@ contentItem.Content[contentType][pascalKey]["Paths"] = paths;
 ```
 
 **Technical Note:** This fix specifically addresses MediaField. Other complex field types like BagPart that require custom driver processing may need a different approach using `IContentItemDisplayManager.UpdateEditorAsync()` to invoke Orchard's field driver pipeline.
+
+## Feature: BagPart POST/PUT Support with Newtonsoft.Json Removal, 2025-10-29 18:30
+
+**Issue:** BagPart content items (nested/contained items like Recipe → IngredientAmount) could not be created or updated via POST/PUT endpoints. Additionally, PostRoutes.cs and PutRoutes.cs had Newtonsoft.Json dependencies that could be removed in favor of System.Text.Json.
+
+**Root Cause:**
+1. No handling for the `items` field to create/update BagPart ContentItems
+2. Inconsistent field naming for ContentPicker arrays (input used `ownerId` but output used `owner`)
+3. "owner" and "author" in RESERVED_FIELDS prevented using them as ContentPicker field names
+4. Newtonsoft.Json dependencies (JObject, JArray) in POST/PUT routes
+
+**Solution:**
+1. Added BagPart support: `items` field creates/updates BagPart ContentItems with proper structure
+2. Fixed GetRoutes.Cleanup.cs:132 to return `isIdReference=true` for multiple ContentItemIds, ensuring consistent "Id" suffix
+3. Removed "owner" and "author" from RESERVED_FIELDS in PostRoutes.cs and PutRoutes.cs
+4. Replaced Newtonsoft.Json types with standard C# collections (Dictionary<string, object>, List<object>)
+
+**Affected Files:**
+- `backend/RestRoutes/PostRoutes.cs`: Added BagPart handling, removed Newtonsoft.Json, removed "owner"/"author" from RESERVED_FIELDS
+- `backend/RestRoutes/PutRoutes.cs`: Added BagPart handling, removed Newtonsoft.Json, removed "owner"/"author" from RESERVED_FIELDS
+- `backend/RestRoutes/GetRoutes.Cleanup.cs`: Fixed line 132 for consistent ContentItemIds naming
+
+**Result:**
+- BagPart items can now be created and updated via POST/PUT
+- Input/output field names are consistent (`ownerId` for both)
+- No external Newtonsoft.Json dependency
+- ContentPicker fields can use "owner"/"author" names without conflicts
+
+**Testing:** Successfully tested POST creating Recipe with 2 IngredientAmount items, PUT updating to 1 item, and GET/expand showing correctly populated nested references.
+
+**Example POST with BagPart:**
+```json
+POST /api/Recipe
+{
+  "title": "Test Recipe",
+  "description": "A test recipe",
+  "items": [
+    {
+      "contentType": "IngredientAmount",
+      "amount": 100,
+      "unit": ["grams"],
+      "ingredientId": "41b4gw9e2zsptwc7fpb9570b5s"
+    }
+  ]
+}
+```
+
+**Example PUT with BagPart:**
+```json
+PUT /api/Recipe/{id}
+{
+  "title": "Updated Recipe",
+  "items": [
+    {
+      "contentType": "IngredientAmount",
+      "amount": 200,
+      "unit": ["grams"],
+      "ingredientId": "41b4gw9e2zsptwc7fpb9570b5s"
+    }
+  ]
+}
+```

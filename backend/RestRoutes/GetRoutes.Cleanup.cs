@@ -122,14 +122,14 @@ public static partial class GetRoutes
                             }
                         }
                         // Single ID: return as string with isIdReference=true (appends "Id" to field name)
-                        // Multiple IDs: return as array with isIdReference=false (keeps field name as-is)
+                        // Multiple IDs: return as array with isIdReference=true (appends "Id" to field name)
                         if (idsList.Count == 1)
                         {
                             return (idsList[0], true);
                         }
                         else if (idsList.Count > 1)
                         {
-                            return (idsList.ToArray(), false);
+                            return (idsList.ToArray(), true);
                         }
                         return (null, false); // Empty array
                     }
