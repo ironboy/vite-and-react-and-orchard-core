@@ -49,4 +49,29 @@ contentItem.Content[contentType][pascalKey]["Paths"] = paths;
 
 **Testing:** Successfully tested creating a Pet with an image field containing a media path. The path is correctly stored in the database and retrieved via both `/api/{contentType}` and `/api/expand/{contentType}` endpoints.
 
+**Example POST body that works:**
+```json
+{
+  "title": "Odie",
+  "species": "dog",
+  "image": {
+    "paths": ["_Users/4qn6twzb1y5zd7f8004294agc8/f23749d1-87b1-4807-9cb3-c407c5ea704e.jpg"],
+    "mediaTexts": [""]
+  }
+}
+```
+
+**Successful response from GET `/api/expand/Pet/{id}`:**
+```json
+{
+  "id": "45zh4a6sa6w131bqghcm2rqb47",
+  "title": "Odie",
+  "species": "dog",
+  "image": {
+    "paths": ["_Users/4qn6twzb1y5zd7f8004294agc8/f23749d1-87b1-4807-9cb3-c407c5ea704e.jpg"],
+    "mediaTexts": [""]
+  }
+}
+```
+
 **Technical Note:** This fix specifically addresses MediaField. Other complex field types like BagPart that require custom driver processing may need a different approach using `IContentItemDisplayManager.UpdateEditorAsync()` to invoke Orchard's field driver pipeline.
