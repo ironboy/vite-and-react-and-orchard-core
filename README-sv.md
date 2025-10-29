@@ -130,6 +130,69 @@ Content-Type: application/json
 
 Nya användare tilldelas automatiskt rollen **Customer**. Fälten `firstName`, `lastName` och `phone` är valfria.
 
+## Mediauppladdning
+
+Applikationen inkluderar en endpoint för filuppladdning för att ladda upp mediafiler (bilder, etc.) till servern.
+
+### Uppladdningsendpoint
+
+```bash
+POST /api/media-upload
+Content-Type: multipart/form-data
+
+file: [binär fildata]
+```
+
+**Svar:**
+```json
+{
+  "success": true,
+  "fileName": "abc12345-def6-7890-abcd-ef1234567890.jpg",
+  "originalFileName": "photo.jpg",
+  "url": "/media/_Users/4qn6twzb1y5zd7f8004294agc8/abc12345-def6-7890-abcd-ef1234567890.jpg",
+  "size": 102400
+}
+```
+
+**Autentisering krävs:** Ja - användaren måste vara inloggad för att ladda upp filer.
+
+### Konfiguration
+
+Mediauppladdningsfunktionen kan konfigureras i `backend/RestRoutes/MediaUploadRoutes.cs` med hjälp av tre flaggor högst upp i klassen:
+
+```csharp
+// Vilka roller som tillåts ladda upp filer
+private static readonly HashSet<string> ALLOWED_ROLES = new()
+{
+    "Administrator",
+    "Customer"  // Lägg till/ta bort roller efter behov
+};
+
+// Ska filer organiseras i användarspecifika undermappar?
+private static readonly bool USE_USER_SUBFOLDERS = true;
+
+// Maximal filstorlek i megabyte
+private static readonly int MAX_FILE_SIZE_MB = 10;
+```
+
+**Filorganisation:**
+- Om `USE_USER_SUBFOLDERS = true`: Filer sparas till `App_Data/Sites/Default/Media/_Users/{userId}/`
+- Om `USE_USER_SUBFOLDERS = false`: Filer sparas till `App_Data/Sites/Default/Media/`
+- Filnamn genereras automatiskt med hjälp av GUID:er för att förhindra kollisioner
+
+### Frontend-exempel
+
+Ett enkelt frontend-exempel ingår i `src/` som demonstrerar:
+- Inloggningsformulär (`src/components/Login.tsx`)
+- Filuppladdningsformulär (`src/components/FileUpload.tsx`)
+- Hantering av autentiseringstillstånd (`src/utils/auth.ts`)
+- Verktyg för mediauppladdning (`src/utils/mediaUploader.ts`)
+
+**Obs för produktion:** I en fullskalig applikation skulle du normalt:
+- Använda React Router för att hantera inloggning på en dedikerad rutt
+- Lagra den autentiserade användaren i en Context eller liknande state management-lösning så att alla komponenter har tillgång till den aktuella användaren
+- Det inkluderade exemplet håller autentiseringstillståndet lokalt till App-komponenten för enkelhetens skull
+
 ## REST API
 
 Applikationen tillhandahåller ett anpassat REST API för alla Orchard Core-innehållstyper. Alla endpoints (förutom autentisering) är skyddade av behörighetssystemet.

@@ -130,6 +130,69 @@ Content-Type: application/json
 
 New users are automatically assigned the **Customer** role. The `firstName`, `lastName`, and `phone` fields are optional.
 
+## Media Upload
+
+The application includes a file upload endpoint for uploading media files (images, etc.) to the server.
+
+### Upload Endpoint
+
+```bash
+POST /api/media-upload
+Content-Type: multipart/form-data
+
+file: [binary file data]
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "fileName": "abc12345-def6-7890-abcd-ef1234567890.jpg",
+  "originalFileName": "photo.jpg",
+  "url": "/media/_Users/4qn6twzb1y5zd7f8004294agc8/abc12345-def6-7890-abcd-ef1234567890.jpg",
+  "size": 102400
+}
+```
+
+**Authentication Required:** Yes - user must be logged in to upload files.
+
+### Configuration
+
+The media upload feature can be configured in `backend/RestRoutes/MediaUploadRoutes.cs` using three flags at the top of the class:
+
+```csharp
+// Which roles are allowed to upload files
+private static readonly HashSet<string> ALLOWED_ROLES = new()
+{
+    "Administrator",
+    "Customer"  // Add/remove roles as needed
+};
+
+// Should files be organized in user-specific subfolders?
+private static readonly bool USE_USER_SUBFOLDERS = true;
+
+// Maximum file size in megabytes
+private static readonly int MAX_FILE_SIZE_MB = 10;
+```
+
+**File Organization:**
+- If `USE_USER_SUBFOLDERS = true`: Files are saved to `App_Data/Sites/Default/Media/_Users/{userId}/`
+- If `USE_USER_SUBFOLDERS = false`: Files are saved to `App_Data/Sites/Default/Media/`
+- Filenames are automatically generated using GUIDs to prevent collisions
+
+### Frontend Example
+
+A simple frontend example is included in `src/` that demonstrates:
+- Login form (`src/components/Login.tsx`)
+- File upload form (`src/components/FileUpload.tsx`)
+- Authentication state management (`src/utils/auth.ts`)
+- Media upload utility (`src/utils/mediaUploader.ts`)
+
+**Note for Production:** In a full-scale application, you would typically:
+- Use React Router to handle login on a dedicated route
+- Store the authenticated user in a Context or similar state management solution so all components have access to the current user
+- The included example keeps authentication state local to the App component for simplicity
+
 ## REST API
 
 The application provides a custom REST API for all Orchard Core content types. All endpoints (except authentication) are protected by the permissions system.
