@@ -145,13 +145,45 @@ public static class PostRoutes
                         }
                         else if (jsonElement.ValueKind == JsonValueKind.Object)
                         {
-                            // Handle objects - convert keys to PascalCase
-                            var obj = new JObject();
-                            foreach (var prop in jsonElement.EnumerateObject())
+                            // Check if this is a MediaField (has "paths" and "mediaTexts" properties)
+                            if (jsonElement.TryGetProperty("paths", out var pathsProp) && pathsProp.ValueKind == JsonValueKind.Array &&
+                                jsonElement.TryGetProperty("mediaTexts", out var mediaTextsProp) && mediaTextsProp.ValueKind == JsonValueKind.Array)
                             {
-                                obj[ToPascalCase(prop.Name)] = ConvertJsonElementToPascal(prop.Value);
+                                // Handle MediaField - use List<string> instead of JArray for System.Text.Json compatibility
+                                var paths = new List<string>();
+                                foreach (var path in pathsProp.EnumerateArray())
+                                {
+                                    if (path.ValueKind == JsonValueKind.String)
+                                    {
+                                        var pathStr = path.GetString();
+                                        if (pathStr != null) paths.Add(pathStr);
+                                    }
+                                }
+
+                                var mediaTexts = new List<string>();
+                                foreach (var text in mediaTextsProp.EnumerateArray())
+                                {
+                                    if (text.ValueKind == JsonValueKind.String)
+                                    {
+                                        var textStr = text.GetString();
+                                        if (textStr != null) mediaTexts.Add(textStr);
+                                    }
+                                }
+
+                                // Assign arrays directly - ContentItem.Content uses System.Text.Json, so use List instead of JArray
+                                contentItem.Content[contentType][pascalKey]["Paths"] = paths;
+                                contentItem.Content[contentType][pascalKey]["MediaTexts"] = mediaTexts;
                             }
-                            contentItem.Content[contentType][pascalKey] = obj;
+                            else
+                            {
+                                // Handle other objects - convert keys to PascalCase
+                                var obj = new JObject();
+                                foreach (var prop in jsonElement.EnumerateObject())
+                                {
+                                    obj[ToPascalCase(prop.Name)] = ConvertJsonElementToPascal(prop.Value);
+                                }
+                                contentItem.Content[contentType][pascalKey] = obj;
+                            }
                         }
                         else if (jsonElement.ValueKind == JsonValueKind.Array)
                         {
