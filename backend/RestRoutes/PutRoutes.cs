@@ -181,28 +181,62 @@ public static class PutRoutes
                         }
                         else if (jsonElement.ValueKind == JsonValueKind.Array)
                         {
-                            // Handle arrays - could be ContentItemIds or Values
-                            var arrayData = new List<string>();
-                            foreach (var item in jsonElement.EnumerateArray())
+                            // Check if this is a UserPickerField (array of objects with "id" and "username")
+                            var firstElement = jsonElement.EnumerateArray().FirstOrDefault();
+                            if (firstElement.ValueKind == JsonValueKind.Object &&
+                                firstElement.TryGetProperty("id", out _) &&
+                                firstElement.TryGetProperty("username", out _))
                             {
-                                if (item.ValueKind == JsonValueKind.String)
+                                // Unzip the user objects into UserIds and UserNames arrays
+                                var userIds = new List<string>();
+                                var userNames = new List<string>();
+
+                                foreach (var userObj in jsonElement.EnumerateArray())
                                 {
-                                    var str = item.GetString();
-                                    if (str != null) arrayData.Add(str);
+                                    if (userObj.ValueKind == JsonValueKind.Object)
+                                    {
+                                        if (userObj.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.String)
+                                        {
+                                            var userId = idProp.GetString();
+                                            if (userId != null) userIds.Add(userId);
+                                        }
+
+                                        if (userObj.TryGetProperty("username", out var usernameProp) && usernameProp.ValueKind == JsonValueKind.String)
+                                        {
+                                            var username = usernameProp.GetString();
+                                            if (username != null) userNames.Add(username);
+                                        }
+                                    }
                                 }
-                            }
 
-                            // Detect if array contains ContentItemIds (26-char alphanumeric strings)
-                            var isContentItemIds = arrayData.Count > 0 &&
-                                arrayData.All(id => id.Length > 20 && id.All(c => char.IsLetterOrDigit(c)));
-
-                            if (isContentItemIds)
-                            {
-                                contentItem.Content[contentType][pascalKey]["ContentItemIds"] = arrayData;
+                                contentItem.Content[contentType][pascalKey]["UserIds"] = userIds;
+                                contentItem.Content[contentType][pascalKey]["UserNames"] = userNames;
                             }
                             else
                             {
-                                contentItem.Content[contentType][pascalKey]["Values"] = arrayData;
+                                // Handle arrays - could be ContentItemIds or Values
+                                var arrayData = new List<string>();
+                                foreach (var item in jsonElement.EnumerateArray())
+                                {
+                                    if (item.ValueKind == JsonValueKind.String)
+                                    {
+                                        var str = item.GetString();
+                                        if (str != null) arrayData.Add(str);
+                                    }
+                                }
+
+                                // Detect if array contains ContentItemIds (26-char alphanumeric strings)
+                                var isContentItemIds = arrayData.Count > 0 &&
+                                    arrayData.All(id => id.Length > 20 && id.All(c => char.IsLetterOrDigit(c)));
+
+                                if (isContentItemIds)
+                                {
+                                    contentItem.Content[contentType][pascalKey]["ContentItemIds"] = arrayData;
+                                }
+                                else
+                                {
+                                    contentItem.Content[contentType][pascalKey]["Values"] = arrayData;
+                                }
                             }
                         }
                         else

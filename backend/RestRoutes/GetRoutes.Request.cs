@@ -66,8 +66,50 @@ public static partial class GetRoutes
             }
         }
 
+        // Collect all UserIds for enrichment
+        Dictionary<string, JsonElement>? usersDictionary = null;
+        if (populate)
+        {
+            var allUserIds = new HashSet<string>();
+            foreach (var obj in plainObjects)
+            {
+                CollectUserIds(obj, allUserIds);
+            }
+
+            if (allUserIds.Count > 0)
+            {
+                // Query UserIndex to get user data
+                var users = await session
+                    .Query()
+                    .For<OrchardCore.Users.Models.User>()
+                    .With<OrchardCore.Users.Indexes.UserIndex>(x => x.UserId.IsIn(allUserIds))
+                    .ListAsync();
+
+                if (users.Any())
+                {
+                    var usersJsonString = JsonSerializer.Serialize(users, jsonOptions);
+                    var plainUsers = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(usersJsonString);
+                    if (plainUsers != null)
+                    {
+                        usersDictionary = new Dictionary<string, JsonElement>();
+                        foreach (var user in plainUsers)
+                        {
+                            if (user.TryGetValue("UserId", out var userIdElement))
+                            {
+                                var userId = userIdElement.GetString();
+                                if (userId != null)
+                                {
+                                    usersDictionary[userId] = JsonSerializer.SerializeToElement(user);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Clean up the bullshit
-        var cleanObjects = plainObjects.Select(obj => CleanObject(obj, contentType)).ToList();
+        var cleanObjects = plainObjects.Select(obj => CleanObject(obj, contentType, usersDictionary)).ToList();
 
         // Second population pass: cleanup may have introduced new ID fields (e.g., from BagPart items)
         if (populate && cleanObjects.Count > 0)
@@ -111,7 +153,7 @@ public static partial class GetRoutes
                                 if (id != null && type != null)
                                 {
                                     // Clean the item before adding to dictionary
-                                    newItemsDictionary[id] = CleanObject(item, type);
+                                    newItemsDictionary[id] = CleanObject(item, type, usersDictionary);
                                 }
                             }
                         }

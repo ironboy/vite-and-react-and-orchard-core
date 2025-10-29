@@ -44,6 +44,40 @@ public static partial class GetRoutes
         }
     }
 
+    private static void CollectUserIds(Dictionary<string, JsonElement> obj, HashSet<string> userIds)
+    {
+        foreach (var kvp in obj)
+        {
+            if (kvp.Key == "UserIds" && kvp.Value.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var id in kvp.Value.EnumerateArray())
+                {
+                    if (id.ValueKind == JsonValueKind.String)
+                    {
+                        var idStr = id.GetString();
+                        if (idStr != null) userIds.Add(idStr);
+                    }
+                }
+            }
+            else if (kvp.Value.ValueKind == JsonValueKind.Object)
+            {
+                var nested = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(kvp.Value.GetRawText());
+                if (nested != null) CollectUserIds(nested, userIds);
+            }
+            else if (kvp.Value.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in kvp.Value.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.Object)
+                    {
+                        var nested = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.GetRawText());
+                        if (nested != null) CollectUserIds(nested, userIds);
+                    }
+                }
+            }
+        }
+    }
+
     private static void PopulateContentItemIds(
         Dictionary<string, JsonElement> obj,
         Dictionary<string, Dictionary<string, JsonElement>> itemsDictionary)
@@ -52,7 +86,8 @@ public static partial class GetRoutes
 
         foreach (var key in keysToProcess)
         {
-            var value = obj[key];
+            // Skip if key was removed during recursive processing
+            if (!obj.TryGetValue(key, out var value)) continue;
 
             if (key == "ContentItemIds" && value.ValueKind == JsonValueKind.Array)
             {

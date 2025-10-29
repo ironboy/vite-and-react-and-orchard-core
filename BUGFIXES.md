@@ -1,4 +1,4 @@
-# Bugfixes
+# Bugfixes / added features
 
 ## Bugfix: Recursive Population for Nested ContentPicker References, 2025-10-29 15:45
 
@@ -137,3 +137,60 @@ PUT /api/Recipe/{id}
   ]
 }
 ```
+
+## Feature: UserPickerField POST/PUT/GET Support with User Enrichment, 2025-10-29 20:54
+
+**Issue:** UserPickerField was not supported in POST/PUT operations, and GET responses only returned basic user info (id, username) without additional fields like email, phone, firstName, lastName.
+
+**Solution:**
+1. **POST/PUT**: Accept user objects with `id` and `username` properties, convert to Orchard's parallel arrays (UserIds/UserNames)
+2. **GET /api/expand**: Batch query UserIndex via YesSql to enrich user data with email, phone, and spread Properties object (firstName, lastName, custom fields)
+3. Transform Orchard's awkward parallel arrays into clean object format
+
+**Affected Files:**
+- `backend/RestRoutes/PostRoutes.cs`: Added UserPickerField detection and unzipping
+- `backend/RestRoutes/PutRoutes.cs`: Added UserPickerField detection and unzipping
+- `backend/RestRoutes/GetRoutes.Cleanup.cs`: Added user enrichment with YesSql data
+- `backend/RestRoutes/GetRoutes.Population.cs`: Added CollectUserIds method
+- `backend/RestRoutes/GetRoutes.Request.cs`: Added batch UserIndex query and enrichment
+
+**Result:**
+- Clean API: POST/PUT with `[{id, username}]` format
+- Rich responses: GET /api/expand returns email, phone, firstName, lastName, and any custom Properties
+- Efficient: Single batch query via YesSql (no N+1)
+- Future-proof: Properties object is spread automatically
+
+**Example POST/PUT with UserPickerField:**
+```json
+POST /api/ArtistInfo
+{
+  "title": "Alice's Art",
+  "description": "Contemporary artist",
+  "customer": [
+    {
+      "id": "4d199s979mvpfyqmb5jnetyqm9",
+      "username": "alice"
+    }
+  ]
+}
+```
+
+**Example GET /api/expand response (enriched):**
+```json
+{
+  "id": "4gx56nbr93whhym9n4b578vwct",
+  "title": "Alice's Art",
+  "customer": [
+    {
+      "id": "4d199s979mvpfyqmb5jnetyqm9",
+      "username": "alice",
+      "email": "alice@example.com",
+      "phone": "+1234567890",
+      "firstName": "Alice",
+      "lastName": "Anderson"
+    }
+  ]
+}
+```
+
+**Note:** POST/PUT requires BOTH `id` and `username` for each user. GET `/api/{contentType}` returns basic format (id, username), while GET `/api/expand/{contentType}` returns enriched format with all user fields.
