@@ -195,7 +195,7 @@ POST /api/ArtistInfo
 
 **Note:** POST/PUT requires BOTH `id` and `username` for each user. GET `/api/{contentType}` returns basic format (id, username), while GET `/api/expand/{contentType}` returns enriched format with all user fields.
 
-## Feature: Add User ID to Auth Endpoints, 2025-11-04
+## Feature: Add User ID to Auth Endpoints, 2025-11-04 12:15
 
 **Issue:** Authentication endpoints (GET/POST `/api/auth/login` and POST `/api/auth/register`) were not returning the user ID in their responses, making it difficult for clients to identify and reference the authenticated user.
 
