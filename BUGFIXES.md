@@ -194,3 +194,58 @@ POST /api/ArtistInfo
 ```
 
 **Note:** POST/PUT requires BOTH `id` and `username` for each user. GET `/api/{contentType}` returns basic format (id, username), while GET `/api/expand/{contentType}` returns enriched format with all user fields.
+
+## Feature: Add User ID to Auth Endpoints, 2025-11-04
+
+**Issue:** Authentication endpoints (GET/POST `/api/auth/login` and POST `/api/auth/register`) were not returning the user ID in their responses, making it difficult for clients to identify and reference the authenticated user.
+
+**Solution:** Added `id` field containing the user's `UserId` to all three authentication endpoint responses. Since the `IUser` interface doesn't expose `UserId` directly, we cast to the concrete `User` type to access the property.
+
+**Affected Files:**
+- `backend/RestRoutes/AuthEndpoints.cs:61`: Added `id` to POST `/api/auth/register` response
+- `backend/RestRoutes/AuthEndpoints.cs:114`: Added `id` to POST `/api/auth/login` response
+- `backend/RestRoutes/AuthEndpoints.cs:144`: Added `id` to GET `/api/auth/login` response
+
+**Technical Note:** The `UserId` property is only available on the concrete `User` class, not on the `IUser` interface. All three endpoints cast to `User` using `var u = user as User;` and then access `u?.UserId` to safely retrieve the ID.
+
+**Result:** All authentication endpoints now return the user's ID along with other user information (username, email, firstName, lastName, etc.), enabling clients to easily reference and store the authenticated user's identifier.
+
+**Example POST /api/auth/register response:**
+```json
+{
+  "id": "4d199s979mvpfyqmb5jnetyqm9",
+  "username": "alice",
+  "email": "alice@example.com",
+  "firstName": "Alice",
+  "lastName": "Anderson",
+  "phone": "+1234567890",
+  "role": "Customer",
+  "message": "User created successfully"
+}
+```
+
+**Example POST /api/auth/login response:**
+```json
+{
+  "id": "4d199s979mvpfyqmb5jnetyqm9",
+  "username": "alice",
+  "email": "alice@example.com",
+  "phoneNumber": "+1234567890",
+  "firstName": "Alice",
+  "lastName": "Anderson",
+  "roles": ["Customer"]
+}
+```
+
+**Example GET /api/auth/login response (current user):**
+```json
+{
+  "id": "4d199s979mvpfyqmb5jnetyqm9",
+  "username": "alice",
+  "email": "alice@example.com",
+  "phoneNumber": "+1234567890",
+  "firstName": "Alice",
+  "lastName": "Anderson",
+  "roles": ["Customer"]
+}
+```
