@@ -714,3 +714,93 @@ GET response (cleaned) after fix:
 - The type check happens first, so legitimate ID references are unaffected
 
 **Reported By:** Team 1 (4th of November 2025) - Thank you Team 1 for the detailed bug report and test case!
+
+## Bugfix: UserPickerField Broken When Field Name Ends with "Id", 2025-11-06 11:45
+
+**Issue:** UserPickerFields with field names ending in "Id" (case-insensitive) were being misrouted to ContentPicker logic, causing POST/PUT requests to fail or return empty objects. This affected common field names like `userId`, `driverId`, `ownerId`, `assignedUserId`, etc.
+
+**Root Cause:** The field name check for ContentPicker references (`EndsWith("Id")`) was executed BEFORE the UserPickerField detection logic. When a request included `"userId": [{id: "...", username: "..."}]`, the code would:
+1. See field name ends with "Id"
+2. Route to ContentPicker logic (expecting string or string array)
+3. Fail because ContentPicker logic received an array of objects instead
+4. Never reach the UserPickerField detection logic further down
+
+**Impact:** UserPickerFields could not use field names ending in "Id", forcing developers to use awkward field names like `user`, `driver`, `assignedUser` instead of the more natural `userId`, `driverId`, `assignedUserId`.
+
+**Solution:** Added early UserPickerField detection BEFORE the field name "Id" suffix check. The code now:
+1. Checks if value is an array of objects with both `id` and `username` properties
+2. If yes, marks it as UserPickerField and skips the ContentPicker "Id" logic
+3. Allows the value to continue to the UserPickerField handling in the array logic section
+
+**Code Fix:**
+```csharp
+// Check if this is a UserPickerField BEFORE checking field name ending with "Id"
+// UserPickerFields are arrays of objects with both "id" and "username" properties
+bool isUserPickerField = false;
+if (value is JsonElement checkElement2 && checkElement2.ValueKind == JsonValueKind.Array)
+{
+    var firstElement = checkElement2.EnumerateArray().FirstOrDefault();
+    if (firstElement.ValueKind == JsonValueKind.Object &&
+        firstElement.TryGetProperty("id", out _) &&
+        firstElement.TryGetProperty("username", out _))
+    {
+        isUserPickerField = true;
+    }
+}
+
+// Handle fields ending with "Id" - these are content item references
+// BUT skip this if the value is a number or boolean (e.g., "startBid" with number value)
+// OR if it's a UserPickerField (which should be handled later in the array logic)
+if (!isNumberOrBoolean &&
+    !isUserPickerField &&
+    kvp.Key.EndsWith("Id", StringComparison.OrdinalIgnoreCase) &&
+    kvp.Key.Length > 2)
+{
+    // ContentPicker logic here...
+}
+```
+
+**Affected Files:**
+- `backend/RestRoutes/PostRoutes.cs`: Lines 130-150 (main loop), added early UserPickerField detection
+- `backend/RestRoutes/PutRoutes.cs`: Lines 230-250 (main loop), added early UserPickerField detection
+
+**Example from Team 4:**
+
+Before fix - POST request that failed:
+```json
+POST /api/Car
+{
+  "brand": "Volvo",
+  "model": "V70",
+  "userId": [{
+    "id": "4d199s979mvpfyqmb5jnetyqm9",
+    "username": "testdriver"
+  }]
+}
+```
+
+Expected database structure (AFTER fix):
+```json
+{
+  "Car": {
+    "Brand": { "Text": "Volvo" },
+    "Model": { "Text": "V70" },
+    "UserId": {
+      "UserIds": ["4d199s979mvpfyqmb5jnetyqm9"],
+      "UserNames": ["testdriver"]
+    }
+  }
+}
+```
+
+**Breaking Change:** This fix is a breaking change IF developers had already implemented workarounds by renaming their UserPickerFields to avoid "Id" suffixes. However, this is the correct behavior that matches the documentation and user expectations.
+
+**Additional Fix - Auth Endpoints:** Also added missing `id` field to POST `/api/auth/register` response in Team 4's code to match documentation. All auth endpoints (register, login, get current user) now consistently return the user ID.
+
+**Technical Note:** This fix is safe because:
+- UserPickerFields are ALWAYS arrays of objects with `{id, username}` structure
+- ContentPicker fields with "Id" suffix are ALWAYS strings or string arrays
+- The detection is specific and cannot cause false positives
+- The check happens before the "Id" suffix logic, so it has priority
+
+**Reported By:** Team 4 (4th of November 2025) - Thank you Team 4 for reporting this issue!

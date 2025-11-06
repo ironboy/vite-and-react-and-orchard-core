@@ -227,9 +227,25 @@ public static class PutRoutes
                                           checkElement.ValueKind == JsonValueKind.False;
                     }
 
+                    // Check if this is a UserPickerField BEFORE checking field name ending with "Id"
+                    // UserPickerFields are arrays of objects with both "id" and "username" properties
+                    bool isUserPickerField = false;
+                    if (value is JsonElement checkElement2 && checkElement2.ValueKind == JsonValueKind.Array)
+                    {
+                        var firstElement = checkElement2.EnumerateArray().FirstOrDefault();
+                        if (firstElement.ValueKind == JsonValueKind.Object &&
+                            firstElement.TryGetProperty("id", out _) &&
+                            firstElement.TryGetProperty("username", out _))
+                        {
+                            isUserPickerField = true;
+                        }
+                    }
+
                     // Handle fields ending with "Id" - these are content item references
                     // BUT skip this if the value is a number or boolean (e.g., "startBid" with number value)
+                    // OR if it's a UserPickerField (which should be handled later in the array logic)
                     if (!isNumberOrBoolean &&
+                        !isUserPickerField &&
                         kvp.Key.EndsWith("Id", StringComparison.OrdinalIgnoreCase) &&
                         kvp.Key.Length > 2)
                     {
