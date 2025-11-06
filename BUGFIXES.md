@@ -793,8 +793,6 @@ Expected database structure (AFTER fix):
 }
 ```
 
-**Breaking Change:** This fix is a breaking change IF developers had already implemented workarounds by renaming their UserPickerFields to avoid "Id" suffixes. However, this is the correct behavior that matches the documentation and user expectations.
-
 **Additional Fix - Auth Endpoints:** Also added missing `id` field to POST `/api/auth/register` response in Team 4's code to match documentation. All auth endpoints (register, login, get current user) now consistently return the user ID.
 
 **Technical Note:** This fix is safe because:
