@@ -355,3 +355,126 @@ eventSource.addEventListener('new', (e) => {
   console.log('New item:', item);
 });
 ```
+
+**Testing Note:** In Chromium-based browsers (Chrome, Edge, etc.) you can test SSE automatically by entering the route directly in the browser address field (e.g., `http://localhost:5001/api/sse/Ingredient?where=unitType=Volume`). The browser will display the SSE events as they arrive. However, you cannot test SSE routes in tools like ThunderClient as they do not support the streaming nature of Server-Sent Events.
+
+## Feature: $push Operator for BagPart Array Operations, 2025-11-06 09:00
+
+**Issue:** When updating BagPart content (e.g., Recipe with IngredientAmount items), the entire `items` array had to be reposted via PUT, even to add a single item. For content with many BagPart items (e.g., an Auction with 100+ Bid items), this was inefficient and error-prone.
+
+**Solution:** Implemented MongoDB-style `$push` operator for PUT requests that appends new items to existing BagPart arrays without requiring the full array to be sent. The implementation includes two quality-of-life improvements:
+
+1. **Automatic contentType Inference**: When using `$push`, the `contentType` field is automatically inferred from existing BagPart items, so it can be omitted from new items
+2. **Automatic Content Item ID Detection**: String values that match the content item ID format (26 alphanumeric characters) are automatically treated as ContentPicker references, even without the "Id" suffix
+
+**Key Differences from POST/PUT:**
+
+| Feature | POST (create) | PUT (replace) | PUT ($push) |
+|---------|--------------|---------------|-------------|
+| Operation | Create new item | Replace all BagPart items | Append to existing items |
+| contentType | **Required** | **Required** | **Optional** (inferred) |
+| Existing items | N/A | Discarded | Preserved + new appended |
+
+**Note:** In all cases, content item ID references are automatically detected (26-char alphanumeric strings), whether the field ends with "Id" or not.
+
+**Affected Files:**
+- `backend/RestRoutes/PutRoutes.cs:94-161`: Added `$push` detection, contentType inference from existing items, and auto-detection of content item IDs
+- `backend/RestRoutes/PostRoutes.cs:418-433`: Added auto-detection of content item IDs in `CreateBagPartItem`
+
+**Result:**
+- BagPart items can be appended efficiently using `{"items": {"$push": [...]}}` syntax
+- contentType automatically inferred from existing items when using $push (not needed for first item)
+- Content item IDs recognized automatically whether field ends with "Id" or not (e.g., both `"ingredientId"` and `"ingredient"` work)
+- Significantly reduces payload size and complexity for incremental updates
+
+**Testing:** Successfully tested creating Recipe with 1 item, then using $push to append 2 more items. Verified all 3 items present after operation and references properly expanded via `/api/expand` endpoint.
+
+**Example: Standard PUT (replaces all items):**
+```json
+PUT /api/Recipe/4ctx3055kk3c6sq2abvr83s2n8
+{
+  "items": [
+    {
+      "contentType": "IngredientAmount",
+      "ingredientId": "41b4gw9e2zsptwc7fpb9570b5s",
+      "amount": 100,
+      "unit": "g"
+    },
+    {
+      "contentType": "IngredientAmount",
+      "ingredientId": "4jyh1gfcjhv3k7y0zj57tbcqm5",
+      "amount": 50,
+      "unit": "g"
+    }
+  ]
+}
+```
+
+**Example: PUT with $push (appends items):**
+```json
+PUT /api/Recipe/4ctx3055kk3c6sq2abvr83s2n8
+{
+  "items": {
+    "$push": [
+      {
+        "ingredient": "4vktmhqt3cttwtqc95y31nq5wn",
+        "amount": 3,
+        "unit": "pieces"
+      }
+    ]
+  }
+}
+```
+
+**Result after $push (3 total items):**
+```json
+GET /api/expand/Recipe/4ctx3055kk3c6sq2abvr83s2n8
+{
+  "id": "4ctx3055kk3c6sq2abvr83s2n8",
+  "title": "Test Recipe",
+  "items": [
+    {
+      "id": "4ttryygd5ctj07eqctvhz3zfm5",
+      "ingredient": {
+        "id": "41b4gw9e2zsptwc7fpb9570b5s",
+        "title": "Mjölk",
+        "unitType": ["Volume"]
+      },
+      "amount": 100,
+      "unit": "g"
+    },
+    {
+      "id": "4en77tenw7m7zrx1gjasj9rjmj",
+      "ingredient": {
+        "id": "4jyh1gfcjhv3k7y0zj57tbcqm5",
+        "title": "Oboy",
+        "unitType": ["Weight"]
+      },
+      "amount": 50,
+      "unit": "g"
+    },
+    {
+      "ingredient": {
+        "id": "4vktmhqt3cttwtqc95y31nq5wn",
+        "title": "Ägg",
+        "unitType": ["Weight"]
+      },
+      "amount": 3,
+      "unit": "pieces"
+    }
+  ]
+}
+```
+
+**Technical Notes:**
+- contentType inference only works when existing items are present; first item creation via POST must specify contentType explicitly
+- Content item ID auto-detection checks for exactly 26 alphanumeric characters (Orchard Core's standard ID format)
+- Both `"ingredientId": "abc123..."` (explicit) and `"ingredient": "abc123..."` (auto-detected) work identically
+- The $push operator preserves existing item IDs, order, and all properties - only appends new items to the end
+- Multiple items can be pushed in a single request by including multiple objects in the $push array
+
+**Use Cases:**
+- **Auction bidding**: Add new Bid to Auction without resending all previous bids
+- **Recipe management**: Add ingredients incrementally without reposting full recipe
+- **Order items**: Append products to order as customer shops
+- **Comment threads**: Add new comments to post without fetching all existing comments

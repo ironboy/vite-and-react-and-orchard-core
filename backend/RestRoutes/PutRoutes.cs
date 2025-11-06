@@ -82,24 +82,109 @@ public static class PutRoutes
                     var value = kvp.Value;
 
                     // Handle "items" field - this should become BagPart
-                    if (kvp.Key == "items" && value is JsonElement itemsElement && itemsElement.ValueKind == JsonValueKind.Array)
+                    if (kvp.Key == "items")
                     {
                         var bagItems = new List<object>();
-                        foreach (var item in itemsElement.EnumerateArray())
-                        {
-                            if (item.ValueKind == JsonValueKind.Object)
-                            {
-                                // Get contentType first
-                                string? itemType = null;
-                                if (item.TryGetProperty("contentType", out var ctProp) && ctProp.ValueKind == JsonValueKind.String)
-                                {
-                                    itemType = ctProp.GetString();
-                                }
 
-                                if (!string.IsNullOrEmpty(itemType))
+                        // Check if this is a $push operation
+                        JsonElement itemsArrayElement = default;
+
+                        if (value is JsonElement itemsElement)
+                        {
+                            if (itemsElement.ValueKind == JsonValueKind.Object && itemsElement.TryGetProperty("$push", out var pushProp))
+                            {
+                                // $push operation - append to existing items
+                                itemsArrayElement = pushProp;
+
+                                // Get existing BagPart items
+                                if (contentItem.Content.ContainsKey("BagPart"))
                                 {
-                                    var bagItem = CreateBagPartItem(item, itemType);
-                                    bagItems.Add(bagItem);
+                                    var bagPart = contentItem.Content["BagPart"];
+
+                                    // BagPart could be JsonElement or dynamic object
+                                    if (bagPart is JsonElement bagElement)
+                                    {
+                                        if (bagElement.TryGetProperty("ContentItems", out var existingItems) && existingItems.ValueKind == JsonValueKind.Array)
+                                        {
+                                            // Add existing items to list
+                                            foreach (var existingItem in existingItems.EnumerateArray())
+                                            {
+                                                // Deserialize to ContentItem to preserve existing items
+                                                var ci = System.Text.Json.JsonSerializer.Deserialize<ContentItem>(existingItem.GetRawText());
+                                                if (ci != null)
+                                                {
+                                                    bagItems.Add(ci);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // Try to get ContentItems from dynamic object
+                                        dynamic dynBagPart = bagPart;
+                                        if (dynBagPart.ContentItems != null)
+                                        {
+                                            // ContentItems is also dynamic - iterate and serialize/deserialize each item
+                                            foreach (var item in dynBagPart.ContentItems)
+                                            {
+                                                if (item is ContentItem ci)
+                                                {
+                                                    bagItems.Add(ci);
+                                                }
+                                                else
+                                                {
+                                                    // Item is not a ContentItem - serialize/deserialize to convert
+                                                    var json = System.Text.Json.JsonSerializer.Serialize(item);
+                                                    var deserializedItem = System.Text.Json.JsonSerializer.Deserialize<ContentItem>(json);
+                                                    if (deserializedItem != null)
+                                                    {
+                                                        bagItems.Add(deserializedItem);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else if (itemsElement.ValueKind == JsonValueKind.Array)
+                            {
+                                // Regular array - replace all items
+                                itemsArrayElement = itemsElement;
+                            }
+                        }
+
+                        // Infer contentType from existing items if not specified
+                        string? inferredContentType = null;
+                        if (bagItems.Count > 0 && bagItems[0] is ContentItem firstItem)
+                        {
+                            inferredContentType = firstItem.ContentType;
+                        }
+
+                        // Process items to add (either from $push array or regular array)
+                        if (itemsArrayElement.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var item in itemsArrayElement.EnumerateArray())
+                            {
+                                if (item.ValueKind == JsonValueKind.Object)
+                                {
+                                    // Get contentType first
+                                    string? itemType = null;
+                                    if (item.TryGetProperty("contentType", out var ctProp) && ctProp.ValueKind == JsonValueKind.String)
+                                    {
+                                        itemType = ctProp.GetString();
+                                    }
+
+                                    // If no contentType provided, try to infer from existing items
+                                    if (string.IsNullOrEmpty(itemType) && !string.IsNullOrEmpty(inferredContentType))
+                                    {
+                                        itemType = inferredContentType;
+                                    }
+
+                                    if (!string.IsNullOrEmpty(itemType))
+                                    {
+                                        var bagItem = CreateBagPartItem(item, itemType);
+                                        bagItems.Add(bagItem);
+                                    }
                                 }
                             }
                         }
@@ -389,9 +474,22 @@ public static class PutRoutes
                     }
                 }
             }
+            // Check if string value looks like a content item ID (even without "Id" suffix)
             else if (value.ValueKind == JsonValueKind.String)
             {
-                typeSection[pascalKey] = new Dictionary<string, object> { ["Text"] = value.GetString()! };
+                var strValue = value.GetString();
+                // If it looks like a content item ID (26 chars alphanumeric), treat as reference
+                if (strValue != null && strValue.Length == 26 && strValue.All(c => char.IsLetterOrDigit(c)))
+                {
+                    typeSection[pascalKey] = new Dictionary<string, object>
+                    {
+                        ["ContentItemIds"] = new List<string> { strValue }
+                    };
+                }
+                else
+                {
+                    typeSection[pascalKey] = new Dictionary<string, object> { ["Text"] = strValue! };
+                }
             }
             else if (value.ValueKind == JsonValueKind.Number)
             {

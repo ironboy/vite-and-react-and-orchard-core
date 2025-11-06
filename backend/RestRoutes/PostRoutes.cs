@@ -415,9 +415,22 @@ public static class PostRoutes
                     }
                 }
             }
+            // Check if string value looks like a content item ID (even without "Id" suffix)
             else if (value.ValueKind == JsonValueKind.String)
             {
-                typeSection[pascalKey] = new Dictionary<string, object> { ["Text"] = value.GetString()! };
+                var strValue = value.GetString();
+                // If it looks like a content item ID (26 chars alphanumeric), treat as reference
+                if (strValue != null && strValue.Length == 26 && strValue.All(c => char.IsLetterOrDigit(c)))
+                {
+                    typeSection[pascalKey] = new Dictionary<string, object>
+                    {
+                        ["ContentItemIds"] = new List<string> { strValue }
+                    };
+                }
+                else
+                {
+                    typeSection[pascalKey] = new Dictionary<string, object> { ["Text"] = strValue! };
+                }
             }
             else if (value.ValueKind == JsonValueKind.Number)
             {
