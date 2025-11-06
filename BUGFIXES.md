@@ -249,3 +249,109 @@ POST /api/ArtistInfo
   "roles": ["Customer"]
 }
 ```
+
+## Bugfix: Array Field Filtering Support, 2025-11-06 08:20
+
+**Issue:** Query filtering on array fields (e.g., `unitType=Weight` or `unitType LIKE Volume`) was not working across GET, expand, and SSE endpoints. Arrays were being converted to string representations instead of checking individual elements, resulting in no matches.
+
+**Root Cause:**
+1. `ConvertToObj` methods only handled `List<object>`, not other enumerable types like `List<string>` or arrays
+2. Filter parsing didn't trim whitespace from keys and values, causing mismatches when spaces were present
+3. `ApplySingleFilter` converted entire arrays to strings for comparison instead of checking each element individually
+
+**Solution:**
+1. Changed `ConvertToObj` to handle any `IEnumerable` (except strings) by checking `kvp.Value is System.Collections.IEnumerable enumerable && kvp.Value is not string`
+2. Added `.Trim()` to both keys and values during filter parsing to handle spaces around operators
+3. Modified `ApplySingleFilter` to detect `Arr` types and iterate through elements, returning true if any element matches the filter condition
+
+**Affected Files:**
+- `backend/RestRoutes/GetRoutes.QueryFilters.cs:73-89`: Updated `ConvertToObj` to handle any IEnumerable
+- `backend/RestRoutes/GetRoutes.QueryFilters.cs:196-203`: Added trimming to filter key/value parsing
+- `backend/RestRoutes/GetRoutes.QueryFilters.cs:238-259`: Added array element checking in `ApplySingleFilter`
+- `backend/RestRoutes/SseEndpoints.cs:128-144, 246-252`: Applied same fixes to SSE endpoint filtering
+- `backend/RestRoutes/SseBackgroundService.cs:329-344, 436-443, 476-496`: Applied same fixes to background service filtering
+
+**Result:** Array field filtering now works consistently across all endpoints (GET, expand, SSE). Any operator (=, !=, >, <, >=, <=, LIKE) can filter on array fields by checking if any element matches the condition.
+
+**Testing:** Successfully tested filtering on `unitType` array field with both exact match (`unitType=Weight`) and partial match (`unitType LIKE Wei`), returning all items where any element in the array matches.
+
+**Example queries that now work:**
+```
+GET /api/Ingredient?where=unitType=Weight
+GET /api/Ingredient?where=unitType LIKE Vol
+GET /api/sse/Ingredient?where=unitType=Volume
+```
+
+**Technical Note:** The fix treats array filtering as an OR operation - if ANY element in the array matches the condition, the item is included in results. This is the expected behavior for multi-select fields like taxonomy or enum arrays.
+
+## Feature: Server-Sent Events (SSE) for Real-Time Updates, 2025-11-06 08:45
+
+**Issue:** No real-time update mechanism existed for clients to receive new content items as they were created. Clients had to poll REST endpoints repeatedly to check for changes.
+
+**Solution:** Implemented Server-Sent Events (SSE) with three components:
+1. **SseConnectionManager**: Manages active SSE connections grouped by content type
+2. **SseEndpoints**: Provides `/api/sse/{contentType}` endpoint that sends initial data and maintains connection
+3. **SseBackgroundService**: Background service that polls database every 3 seconds for new items and broadcasts to matching connections
+
+**Key Features:**
+- Generic endpoint works with any content type: `/api/sse/{contentType}`
+- Supports same query filters as GET routes: `?where=field=value` with all operators (=, !=, >, <, >=, <=, LIKE, AND)
+- Efficient: Single database query per content type per interval, broadcasts to all matching connections
+- Sends heartbeat every 20 seconds to keep connections alive
+- Applies filters to both initial data and new items
+- Automatic cleanup of disconnected clients
+
+**Affected Files:**
+- `backend/RestRoutes/SseConnectionManager.cs`: New file - Connection tracking and management
+- `backend/RestRoutes/SseEndpoints.cs`: New file - SSE HTTP endpoint with initial data and heartbeat
+- `backend/RestRoutes/SseBackgroundService.cs`: New file - Background polling and broadcasting service
+- `backend/Program.cs:10-12`: Registered SSE services (singleton manager, hosted background service)
+- `backend/RestRoutes/SetupRoutes.cs:15`: Added `app.MapSseEndpoints()` to register routes
+- `backend/RestRoutes/GetRoutes.Population.cs:7,47,81`: Made collection methods public for SSE reuse
+- `backend/RestRoutes/GetRoutes.Cleanup.cs:7`: Made CleanObject public for SSE reuse
+
+**Configuration Constants:**
+- `POLLING_INTERVAL_MS = 3000`: How often to check database for new items (3 seconds)
+- `HEARTBEAT_INTERVAL_MS = 20000`: How often to send keepalive to clients (20 seconds)
+
+**Result:** Clients can now connect to SSE endpoints and receive real-time notifications when new content items are created, with the same filtering capabilities as REST endpoints.
+
+**Testing:** Successfully tested SSE connection with filtered endpoint, verified initial data arrives immediately, and confirmed new items broadcast within 3 seconds of creation via both REST API and Orchard admin panel.
+
+**Example SSE connection:**
+```
+GET /api/sse/Ingredient?where=unitType=Volume
+
+# Initial event (immediate):
+event: initial
+data: [{"id":"41b4gw9e2zsptwc7fpb9570b5s","title":"Mjölk","unitType":["Volume"]}]
+
+# Heartbeat (every 20s):
+: heartbeat
+
+# New item event (within 3s of creation):
+event: new
+data: {"id":"4zs5m9n01j1wk2y2ky47jvkkmt","title":"Juice","unitType":["Volume"]}
+```
+
+**Technical Notes:**
+- SSE uses text/event-stream content type with proper headers (no-cache, keep-alive, X-Accel-Buffering: no)
+- Background service uses OrchardCore's shell context to access scoped YesSql sessions: `shellHost.GetScopeAsync(shellContext.Settings)`
+- Only detects NEW items (CreatedUtc > lastCheckTime), not updates or deletes
+- Multiple clients can connect to same endpoint - only one database query per content type per interval
+- Filters apply to both initial data and new items consistently
+
+**Client Usage Example (JavaScript):**
+```javascript
+const eventSource = new EventSource('/api/sse/Ingredient?where=unitType=Volume');
+
+eventSource.addEventListener('initial', (e) => {
+  const items = JSON.parse(e.data);
+  console.log('Initial items:', items);
+});
+
+eventSource.addEventListener('new', (e) => {
+  const item = JSON.parse(e.data);
+  console.log('New item:', item);
+});
+```
