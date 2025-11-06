@@ -218,8 +218,19 @@ public static class PutRoutes
                         continue;
                     }
 
+                    // Check if value is a number or boolean first - these should NEVER be treated as ID references
+                    bool isNumberOrBoolean = false;
+                    if (value is JsonElement checkElement)
+                    {
+                        isNumberOrBoolean = checkElement.ValueKind == JsonValueKind.Number ||
+                                          checkElement.ValueKind == JsonValueKind.True ||
+                                          checkElement.ValueKind == JsonValueKind.False;
+                    }
+
                     // Handle fields ending with "Id" - these are content item references
-                    if (kvp.Key.EndsWith("Id", StringComparison.OrdinalIgnoreCase) &&
+                    // BUT skip this if the value is a number or boolean (e.g., "startBid" with number value)
+                    if (!isNumberOrBoolean &&
+                        kvp.Key.EndsWith("Id", StringComparison.OrdinalIgnoreCase) &&
                         kvp.Key.Length > 2)
                     {
                         // Transform "ownerId" → "Owner" with ContentItemIds
@@ -477,8 +488,14 @@ public static class PutRoutes
             var pascalKey = ToPascalCase(prop.Name);
             var value = prop.Value;
 
+            // Check if value is a number or boolean first - these should NEVER be treated as ID references
+            bool isNumberOrBoolean = value.ValueKind == JsonValueKind.Number ||
+                                    value.ValueKind == JsonValueKind.True ||
+                                    value.ValueKind == JsonValueKind.False;
+
             // Handle fields ending with "Id" - these are content item references
-            if (prop.Name.EndsWith("Id", StringComparison.OrdinalIgnoreCase) && prop.Name.Length > 2)
+            // BUT skip this if the value is a number or boolean (e.g., "startBid" with number value)
+            if (!isNumberOrBoolean && prop.Name.EndsWith("Id", StringComparison.OrdinalIgnoreCase) && prop.Name.Length > 2)
             {
                 var fieldName = pascalKey.Substring(0, pascalKey.Length - 2);
                 if (value.ValueKind == JsonValueKind.String)

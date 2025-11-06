@@ -618,4 +618,99 @@ Create one "template" or "schema" item for each content type via the Orchard Cor
 }
 ```
 
-**Reported By:** Team 1 (November 2025)
+**Reported By:** Team 1 (4th of November 2025)
+
+## Bugfix: Fields Ending with "Id" Treated as ContentPicker References, 2025-11-06 10:40
+
+**Issue:** Field names ending with "Id" (case-insensitive) were being treated as ContentPicker ID references even when the value was a number or boolean. For example, a field named `"startBid"` with numeric value `300` would be incorrectly processed as if it were a ContentPicker field called `"StartB"` with ContentItemIds, resulting in the value being saved as an empty object `{}` in the database.
+
+**Root Cause:** The code checked `if (kvp.Key.EndsWith("Id", StringComparison.OrdinalIgnoreCase))` BEFORE checking the value type. This meant that ANY field ending with "Id" (like "startBid", "rapidId", "validId", etc.) would be routed to the ContentPicker handling code, even when the value was clearly not a content item ID (numbers and booleans can never be ContentItem IDs).
+
+**Impact:** This bug affected:
+- Numeric fields with names ending in "id": `startBid`, `minimumBid`, `maximumBid`, `rapidId`, `fluidId`, etc.
+- Boolean fields with names ending in "id": `isValidId`, `hasRapidId`, etc.
+- Any field whose name happened to end with "id" where the value wasn't a string ID
+
+**Solution:** Added a type check BEFORE the field name check. The code now:
+1. First checks if the value is a number or boolean (`JsonValueKind.Number`, `JsonValueKind.True`, `JsonValueKind.False`)
+2. If so, skips the "Id" suffix handling entirely (numbers/booleans can't be ContentItem IDs)
+3. Only applies the ContentPicker logic to fields ending with "Id" when the value is a string or array
+
+**Code Change:**
+```csharp
+// Added BEFORE the EndsWith("Id") check:
+bool isNumberOrBoolean = false;
+if (value is JsonElement checkElement)
+{
+    isNumberOrBoolean = checkElement.ValueKind == JsonValueKind.Number ||
+                      checkElement.ValueKind == JsonValueKind.True ||
+                      checkElement.ValueKind == JsonValueKind.False;
+}
+
+// Modified check:
+if (!isNumberOrBoolean &&
+    kvp.Key.EndsWith("Id", StringComparison.OrdinalIgnoreCase) &&
+    kvp.Key.Length > 2)
+```
+
+**Affected Files:**
+- `backend/RestRoutes/PostRoutes.cs:121-134`: Added type check before EndsWith("Id") in main loop
+- `backend/RestRoutes/PostRoutes.cs:422-429`: Added type check in CreateBagPartItem helper
+- `backend/RestRoutes/PutRoutes.cs:221-234`: Added type check before EndsWith("Id") in main loop
+- `backend/RestRoutes/PutRoutes.cs:491-498`: Added type check in CreateBagPartItem helper
+
+**Result:** Numeric and boolean fields with names ending in "Id" now work correctly across POST and PUT operations. Values are properly saved with their correct types instead of becoming empty objects.
+
+**Testing:** We don't have an example in our test database, but this was reported and confirmed by Team 1 using their `ProblemAuction` content type with a `startBid` numeric field. After the fix, their test showed:
+- Before: `POST {"startBid": 777}` → Database: `"StartBid": {}`
+- After: `POST {"startBid": 777}` → Database: `"StartBid": {"Value": 777}`
+
+**Example from Team 1's Bug Report:**
+
+POST request:
+```json
+POST /api/ProblemAuction
+{
+  "title": "Test Auction",
+  "startBid": 300
+}
+```
+
+Raw database content BEFORE fix:
+```json
+{
+  "ProblemAuction": {
+    "StartBid": {},
+    "Seller": { ... }
+  }
+}
+```
+
+Raw database content AFTER fix:
+```json
+{
+  "ProblemAuction": {
+    "StartBid": {
+      "Value": 300
+    },
+    "Seller": { ... }
+  }
+}
+```
+
+GET response (cleaned) after fix:
+```json
+{
+  "id": "4yq9bf6j7ak060s7hjteb1gnnd",
+  "title": "Test Auction",
+  "startBid": 300,
+  "seller": []
+}
+```
+
+**Technical Note:** This fix is safe and won't affect legitimate ContentPicker fields because:
+- ContentPicker values are always strings (single ID) or arrays of strings (multiple IDs)
+- Numbers and booleans physically cannot be content item IDs in Orchard Core
+- The type check happens first, so legitimate ID references are unaffected
+
+**Reported By:** Team 1 (4th of November 2025) - Thank you Team 1 for the detailed bug report and test case!
