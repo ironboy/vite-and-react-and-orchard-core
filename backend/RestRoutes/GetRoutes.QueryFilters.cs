@@ -285,6 +285,29 @@ public static partial class GetRoutes
             {
                 current = dynObj[part];
             }
+            else if (current is Arr dynArr)
+            {
+                // If current is an array, traverse into each object and collect the specified property
+                // This allows filtering on array.property (e.g., customer.id)
+                var results = Arr();
+                foreach (var arrItem in dynArr)
+                {
+                    if (arrItem is Obj arrObj && arrObj.HasKey(part))
+                    {
+                        results.Push(arrObj[part]);
+                    }
+                }
+
+                // If we found any results, continue with those
+                if (results.Length > 0)
+                {
+                    current = results;
+                }
+                else
+                {
+                    return null;
+                }
+            }
             else
             {
                 return null;

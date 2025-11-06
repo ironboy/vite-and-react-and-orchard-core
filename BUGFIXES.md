@@ -804,3 +804,104 @@ Expected database structure (AFTER fix):
 - The check happens before the "Id" suffix logic, so it has priority
 
 **Reported By:** Team 4 (4th of November 2025) - Thank you Team 4 for reporting this issue!
+
+## Bugfix: Query Filtering on Array Fields and Nested Properties, 2025-11-06 11:55
+
+**Issue:** Team 1 reported that query filtering was failing with 500 errors in two scenarios:
+1. Filtering on TextField: `/api/ArtistInfo?where=workTitle=Artist` - crashed with RuntimeBinderException
+2. Filtering on UserPickerField nested property: `/api/ArtistInfo?where=customer.id={id}` - returned empty results
+
+**Root Causes:**
+1. **Dictionary Conversion Error**: The `ConvertToObj` function was passing `Dictionary<string, object>` values directly to Dyndata's `Obj[key] = value` setter. When the value was a `List<Dictionary<string, object>>` (like UserPickerField data), Dyndata's internal `TryToObjOrArr` method tried to access `.Key` on the Dictionary object (which doesn't exist - only KeyValuePair has that property), causing a RuntimeBinderException.
+
+2. **Missing Array Traversal**: The `GetNestedValue` function didn't handle array fields. When filtering on `customer.id`, it needed to:
+   - Recognize that `customer` is an array `[{id: "...", username: "..."}]`
+   - Traverse into each array element
+   - Extract the `id` property from each element
+   - Return an array of those IDs for matching
+
+**Solutions:**
+
+1. **Fixed Dictionary Conversion** (Team 1's GetRoutes.QueryFilters.cs:90-99):
+   - Added explicit handling for `List<Dictionary<string, object>>`
+   - Recursively convert each dictionary to a Dyndata `Obj` before pushing to array
+   - Prevents Dyndata from receiving raw Dictionary objects
+
+2. **Added Array Traversal Support** (Both Team 1 and our GetRoutes.QueryFilters.cs:288-310):
+   - Modified `GetNestedValue` to detect when current value is an `Arr`
+   - When encountering array during property traversal (e.g., `customer.id`):
+     - Iterate through array elements
+     - Extract the requested property from each element
+     - Return array of extracted values
+   - The existing array matching logic in `ApplySingleFilter` then checks if ANY element matches
+
+**Key Code Changes:**
+
+In `ConvertToObj`:
+```csharp
+// Added after existing List<object> handling
+else if (kvp.Value is List<Dictionary<string, object>> dictList)
+{
+    // Handle List<Dictionary<string, object>> (UserPickerField format)
+    var arr = Arr();
+    foreach (var item in dictList)
+    {
+        arr.Push(ConvertToObj(item));  // Convert each dictionary recursively
+    }
+    obj[kvp.Key] = arr;
+}
+```
+
+In `GetNestedValue`:
+```csharp
+else if (current is Arr dynArr)
+{
+    // If current is an array, traverse into each object and collect the specified property
+    // This allows filtering on array.property (e.g., customer.id)
+    var results = Arr();
+    foreach (var arrItem in dynArr)
+    {
+        if (arrItem is Obj arrObj && arrObj.HasKey(part))
+        {
+            results.Push(arrObj[part]);
+        }
+    }
+
+    if (results.Length > 0)
+    {
+        current = results;
+    }
+    else
+    {
+        return null;
+    }
+}
+```
+
+**Affected Files:**
+- Team 1's `backend/RestRoutes/GetRoutes.QueryFilters.cs:64-106`: Added `List<Dictionary<string, object>>` handling
+- Team 1's `backend/RestRoutes/GetRoutes.QueryFilters.cs:277-317`: Added array traversal in `GetNestedValue`
+- Our `backend/RestRoutes/GetRoutes.QueryFilters.cs:278-318`: Applied array traversal fix (dictionary handling already covered by IEnumerable)
+
+**Result:**
+- TextField filtering now works without crashes: `/api/ArtistInfo?where=workTitle=Artist` returns matching results
+- UserPickerField filtering now works: `/api/ArtistInfo?where=customer.id={id}` returns items where any user in the customer array has the specified ID
+- Filtering on nested array properties now works for all field types (UserPickerField, ContentPicker arrays, etc.)
+
+**Testing:**
+
+Team 1's database:
+- Successfully tested `/api/ArtistInfo?where=workTitle=Artist` - returns 1 result with `workTitle: "Artist"`
+- Successfully tested `/api/ArtistInfo?where=customer.id=4ef691565ferj1zdg3e1gcp24w` - returns items associated with that user
+- Both queries return proper JSON without crashes
+
+Our database (port 5001):
+- Successfully tested `/api/ArtistInfo?where=customer.id=4hrarr86148ac309m1wz6tf9n6` - returns 2 results: "Mega-Carl" (only carl) and "The C-duo" (carl + caroline)
+- Successfully tested `/api/ArtistInfo?where=customer.username=alice` - returns 1 result: "Alice's Art"
+- Array filtering works correctly, matching ANY element in the customer UserPickerField array
+
+**Technical Note:** Our main codebase already handled `List<Dictionary<string, object>>` through the more general `IEnumerable` check at line 73, so only the array traversal fix was needed. Team 1's code needed both fixes.
+
+**Reported By:** Team 1 (6th of November 2025) - Thank you Team 1 for reporting this filtering issue!
+
+**Note:** Team 1's code didn't have the earlier bugfixes from today (UserPickerField "Id" suffix fix and numeric field "Id" suffix fix) when they reported this issue, which is why they encountered the Dictionary conversion bug. Our main codebase already had the IEnumerable handling from earlier work, so we only needed the array traversal fix.
