@@ -140,3 +140,10 @@ Thumbs.db
 *.iml
 *.iws
 *.ipr
+
+# ============================================
+# Testing / Temporary
+# ============================================
+
+# Temporary directory for testing student projects
+temp-student-projects/
