@@ -81,75 +81,97 @@ public static class PutRoutes
                     var pascalKey = ToPascalCase(kvp.Key);
                     var value = kvp.Value;
 
-                    // Handle "items" field - this should become BagPart
-                    if (kvp.Key == "items")
+                    // Handle BagPart fields - detect arrays or $push operations with objects that have "contentType" property
+                    // Supports both "items" (default BagPart) and named BagParts like "step", "ingredients", etc.
+                    bool isBagPartField = false;
+                    JsonElement? itemsArrayElement = null;
+                    bool isPushOperation = false;
+
+                    if (value is JsonElement bagPartElement)
+                    {
+                        // Check for $push operation: { "$push": [...] }
+                        if (bagPartElement.ValueKind == JsonValueKind.Object && bagPartElement.TryGetProperty("$push", out var pushProp))
+                        {
+                            if (pushProp.ValueKind == JsonValueKind.Array)
+                            {
+                                var firstElement = pushProp.EnumerateArray().FirstOrDefault();
+                                if (firstElement.ValueKind == JsonValueKind.Object && firstElement.TryGetProperty("contentType", out _))
+                                {
+                                    isBagPartField = true;
+                                    itemsArrayElement = pushProp;
+                                    isPushOperation = true;
+                                }
+                            }
+                        }
+                        // Check for regular array with contentType in first element
+                        else if (bagPartElement.ValueKind == JsonValueKind.Array)
+                        {
+                            var firstElement = bagPartElement.EnumerateArray().FirstOrDefault();
+                            if (firstElement.ValueKind == JsonValueKind.Object && firstElement.TryGetProperty("contentType", out _))
+                            {
+                                isBagPartField = true;
+                                itemsArrayElement = bagPartElement;
+                            }
+                        }
+                    }
+
+                    if (isBagPartField && itemsArrayElement.HasValue)
                     {
                         var bagItems = new List<object>();
 
-                        // Check if this is a $push operation
-                        JsonElement itemsArrayElement = default;
+                        // Determine the part name: "items" → "BagPart", "step" → "Step", etc.
+                        var partName = kvp.Key == "items" ? "BagPart" : pascalKey;
 
-                        if (value is JsonElement itemsElement)
+                        // If this is a $push operation, get existing items first
+                        if (isPushOperation)
                         {
-                            if (itemsElement.ValueKind == JsonValueKind.Object && itemsElement.TryGetProperty("$push", out var pushProp))
+                            if (contentItem.Content.ContainsKey(partName))
                             {
-                                // $push operation - append to existing items
-                                itemsArrayElement = pushProp;
+                                var bagPart = contentItem.Content[partName];
 
-                                // Get existing BagPart items
-                                if (contentItem.Content.ContainsKey("BagPart"))
+                                // BagPart could be JsonElement or dynamic object
+                                if (bagPart is JsonElement bagElement)
                                 {
-                                    var bagPart = contentItem.Content["BagPart"];
-
-                                    // BagPart could be JsonElement or dynamic object
-                                    if (bagPart is JsonElement bagElement)
+                                    if (bagElement.TryGetProperty("ContentItems", out var existingItems) && existingItems.ValueKind == JsonValueKind.Array)
                                     {
-                                        if (bagElement.TryGetProperty("ContentItems", out var existingItems) && existingItems.ValueKind == JsonValueKind.Array)
+                                        // Add existing items to list
+                                        foreach (var existingItem in existingItems.EnumerateArray())
                                         {
-                                            // Add existing items to list
-                                            foreach (var existingItem in existingItems.EnumerateArray())
+                                            // Deserialize to ContentItem to preserve existing items
+                                            var ci = System.Text.Json.JsonSerializer.Deserialize<ContentItem>(existingItem.GetRawText());
+                                            if (ci != null)
                                             {
-                                                // Deserialize to ContentItem to preserve existing items
-                                                var ci = System.Text.Json.JsonSerializer.Deserialize<ContentItem>(existingItem.GetRawText());
-                                                if (ci != null)
-                                                {
-                                                    bagItems.Add(ci);
-                                                }
+                                                bagItems.Add(ci);
                                             }
                                         }
                                     }
-                                    else
+                                }
+                                else
+                                {
+                                    // Try to get ContentItems from dynamic object
+                                    dynamic dynBagPart = bagPart;
+                                    if (dynBagPart.ContentItems != null)
                                     {
-                                        // Try to get ContentItems from dynamic object
-                                        dynamic dynBagPart = bagPart;
-                                        if (dynBagPart.ContentItems != null)
+                                        // ContentItems is also dynamic - iterate and serialize/deserialize each item
+                                        foreach (var item in dynBagPart.ContentItems)
                                         {
-                                            // ContentItems is also dynamic - iterate and serialize/deserialize each item
-                                            foreach (var item in dynBagPart.ContentItems)
+                                            if (item is ContentItem ci)
                                             {
-                                                if (item is ContentItem ci)
+                                                bagItems.Add(ci);
+                                            }
+                                            else
+                                            {
+                                                // Item is not a ContentItem - serialize/deserialize to convert
+                                                var json = System.Text.Json.JsonSerializer.Serialize(item);
+                                                var deserializedItem = System.Text.Json.JsonSerializer.Deserialize<ContentItem>(json);
+                                                if (deserializedItem != null)
                                                 {
-                                                    bagItems.Add(ci);
-                                                }
-                                                else
-                                                {
-                                                    // Item is not a ContentItem - serialize/deserialize to convert
-                                                    var json = System.Text.Json.JsonSerializer.Serialize(item);
-                                                    var deserializedItem = System.Text.Json.JsonSerializer.Deserialize<ContentItem>(json);
-                                                    if (deserializedItem != null)
-                                                    {
-                                                        bagItems.Add(deserializedItem);
-                                                    }
+                                                    bagItems.Add(deserializedItem);
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            else if (itemsElement.ValueKind == JsonValueKind.Array)
-                            {
-                                // Regular array - replace all items
-                                itemsArrayElement = itemsElement;
                             }
                         }
 
@@ -161,37 +183,34 @@ public static class PutRoutes
                         }
 
                         // Process items to add (either from $push array or regular array)
-                        if (itemsArrayElement.ValueKind == JsonValueKind.Array)
+                        foreach (var item in itemsArrayElement.Value.EnumerateArray())
                         {
-                            foreach (var item in itemsArrayElement.EnumerateArray())
+                            if (item.ValueKind == JsonValueKind.Object)
                             {
-                                if (item.ValueKind == JsonValueKind.Object)
+                                // Get contentType first
+                                string? itemType = null;
+                                if (item.TryGetProperty("contentType", out var ctProp) && ctProp.ValueKind == JsonValueKind.String)
                                 {
-                                    // Get contentType first
-                                    string? itemType = null;
-                                    if (item.TryGetProperty("contentType", out var ctProp) && ctProp.ValueKind == JsonValueKind.String)
-                                    {
-                                        itemType = ctProp.GetString();
-                                    }
+                                    itemType = ctProp.GetString();
+                                }
 
-                                    // If no contentType provided, try to infer from existing items
-                                    if (string.IsNullOrEmpty(itemType) && !string.IsNullOrEmpty(inferredContentType))
-                                    {
-                                        itemType = inferredContentType;
-                                    }
+                                // If no contentType provided, try to infer from existing items
+                                if (string.IsNullOrEmpty(itemType) && !string.IsNullOrEmpty(inferredContentType))
+                                {
+                                    itemType = inferredContentType;
+                                }
 
-                                    if (!string.IsNullOrEmpty(itemType))
-                                    {
-                                        var bagItem = CreateBagPartItem(item, itemType);
-                                        bagItems.Add(bagItem);
-                                    }
+                                if (!string.IsNullOrEmpty(itemType))
+                                {
+                                    var bagItem = CreateBagPartItem(item, itemType);
+                                    bagItems.Add(bagItem);
                                 }
                             }
                         }
 
                         if (bagItems.Count > 0)
                         {
-                            contentItem.Content["BagPart"] = new Dictionary<string, object>
+                            contentItem.Content[partName] = new Dictionary<string, object>
                             {
                                 ["ContentItems"] = bagItems
                             };

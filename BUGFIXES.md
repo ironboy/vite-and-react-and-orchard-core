@@ -478,3 +478,97 @@ GET /api/expand/Recipe/4ctx3055kk3c6sq2abvr83s2n8
 - **Recipe management**: Add ingredients incrementally without reposting full recipe
 - **Order items**: Append products to order as customer shops
 - **Comment threads**: Add new comments to post without fetching all existing comments
+
+## Feature: Named BagPart Support, 2025-11-06 09:40
+
+**Background:** Orchard Core allows adding multiple BagPart instances to a single content type using the "Add Named Part" feature. For example, a Recipe might have both a default BagPart (for ingredients) and a named BagPart called "Step" (for recipe steps). Previously, the REST API only recognized the default BagPart mapped to the "items" field and ignored all named BagParts.
+
+**Issue:** When Team 2 created a Recipe with both a default BagPart (IngredientAmount items) and a named BagPart "Step" (RecipeStep items), only the "items" array was returned in GET responses. The "step" field was completely missing despite being visible in the raw Orchard data.
+
+**Solution:** Made BagPart detection generic to automatically detect and process ANY field containing a "ContentItems" array structure:
+
+1. **GET Routes (Cleanup):** Modified to iterate through all object properties and detect any field with a "ContentItems" array, not just hardcoded "BagPart"
+2. **POST Routes:** Added detection for arrays where first element has "contentType" property (BagPart signature)
+3. **PUT Routes:** Extended both regular replacement and $push operations to support named BagParts
+4. **Field Naming:** Automatically converts between Orchard format and API format:
+   - `"BagPart"` → `"items"` (backwards compatible)
+   - `"Step"` → `"step"`
+   - `"Ingredients"` → `"ingredients"`
+
+**Key Detection Logic:**
+```csharp
+// Detects BagPart by checking for contentType in first array element
+var firstElement = jsonArrayElement.EnumerateArray().FirstOrDefault();
+if (firstElement.ValueKind == JsonValueKind.Object &&
+    firstElement.TryGetProperty("contentType", out _))
+{
+    // This is a BagPart field
+}
+```
+
+**Affected Files:**
+- `backend/RestRoutes/GetRoutes.Cleanup.cs:46-91`: Generic BagPart detection for any field with ContentItems array
+- `backend/RestRoutes/PostRoutes.cs:79-119`: Detects and creates named BagParts during POST
+- `backend/RestRoutes/PutRoutes.cs:84-219`: Handles both replacement and $push operations for named BagParts
+
+**Result:** All BagParts (default and named) are now automatically supported across GET, POST, PUT, and $push operations. Recipe now correctly returns both "items" (IngredientAmount) and "step" (RecipeStep) arrays.
+
+**Safety:** The detection logic is completely safe and won't conflict with ContentPicker fields:
+- ContentPicker unpopulated: Array of strings → Not detected as BagPart
+- ContentPicker populated: Objects with "id"/"title" but NO "contentType" → Not detected as BagPart
+- BagPart: Objects WITH "contentType" property → Correctly detected
+
+**Testing:**
+- Created Recipe with both default BagPart ("items") and named BagPart ("step") via POST
+- Verified GET returns both "items" and "step" arrays correctly
+- Tested $push on named BagPart field: `{"step": {"$push": [...]}}` successfully appended items
+- Tested ContentPicker fields remain unaffected (Pet with ownerId still works)
+
+**Examples:**
+
+POST with multiple BagParts:
+```json
+{
+  "title": "Chocolate Drink Recipe",
+  "items": [
+    {
+      "contentType": "IngredientAmount",
+      "amount": 100,
+      "unit": ["ml"],
+      "ingredientId": "abc123..."
+    }
+  ],
+  "step": [
+    {
+      "contentType": "RecipeStep",
+      "title": "Mix ingredients",
+      "description": "Stir well"
+    }
+  ]
+}
+```
+
+GET response:
+```json
+{
+  "id": "xyz789...",
+  "title": "Chocolate Drink Recipe",
+  "items": [...],
+  "step": [...]
+}
+```
+
+$push to named BagPart:
+```json
+{
+  "step": {
+    "$push": [
+      {
+        "contentType": "RecipeStep",
+        "title": "Serve cold",
+        "description": "Add ice"
+      }
+    ]
+  }
+}
+```

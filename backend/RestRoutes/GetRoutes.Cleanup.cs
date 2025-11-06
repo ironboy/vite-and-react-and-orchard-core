@@ -43,36 +43,49 @@ public static partial class GetRoutes
             }
         }
 
-        // Handle BagPart (many-to-many with extra fields)
-        if (obj.TryGetValue("BagPart", out var bagPart) && bagPart.ValueKind == JsonValueKind.Object)
+        // Handle BagPart and Named BagParts (any field with ContentItems array)
+        // Look for any field that has a "ContentItems" array structure
+        foreach (var kvp in obj)
         {
-            var bagDict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(bagPart.GetRawText());
-            if (bagDict != null && bagDict.TryGetValue("ContentItems", out var contentItems) &&
-                contentItems.ValueKind == JsonValueKind.Array)
+            // Skip fields we've already processed
+            if (kvp.Key == "ContentItemId" || kvp.Key == "DisplayText" || kvp.Key == contentType)
+                continue;
+
+            if (kvp.Value.ValueKind == JsonValueKind.Object)
             {
-                var itemsList = new List<object>();
-                foreach (var item in contentItems.EnumerateArray())
+                var partDict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(kvp.Value.GetRawText());
+                if (partDict != null && partDict.TryGetValue("ContentItems", out var contentItems) &&
+                    contentItems.ValueKind == JsonValueKind.Array)
                 {
-                    if (item.ValueKind == JsonValueKind.Object)
+                    var itemsList = new List<object>();
+                    foreach (var item in contentItems.EnumerateArray())
                     {
-                        var itemDict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.GetRawText());
-                        if (itemDict != null && itemDict.TryGetValue("ContentType", out var itemTypeElement))
+                        if (item.ValueKind == JsonValueKind.Object)
                         {
-                            var itemType = itemTypeElement.GetString();
-                            if (itemType != null)
+                            var itemDict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.GetRawText());
+                            if (itemDict != null && itemDict.TryGetValue("ContentType", out var itemTypeElement))
                             {
-                                var cleanedItem = CleanObject(itemDict, itemType, usersDictionary);
-                                // Include contentType for roundtripping
-                                cleanedItem["contentType"] = itemType;
-                                itemsList.Add(cleanedItem);
+                                var itemType = itemTypeElement.GetString();
+                                if (itemType != null)
+                                {
+                                    var cleanedItem = CleanObject(itemDict, itemType, usersDictionary);
+                                    // Include contentType for roundtripping
+                                    cleanedItem["contentType"] = itemType;
+                                    itemsList.Add(cleanedItem);
+                                }
                             }
                         }
                     }
-                }
 
-                if (itemsList.Count > 0)
-                {
-                    clean["items"] = itemsList;
+                    if (itemsList.Count > 0)
+                    {
+                        // Convert field name to camelCase
+                        // "BagPart" → "bagPart" (but we'll special-case this to "items" for backwards compatibility)
+                        // "Step" → "step"
+                        // "Ingredients" → "ingredients"
+                        var fieldName = kvp.Key == "BagPart" ? "items" : ToCamelCase(kvp.Key);
+                        clean[fieldName] = itemsList;
+                    }
                 }
             }
         }

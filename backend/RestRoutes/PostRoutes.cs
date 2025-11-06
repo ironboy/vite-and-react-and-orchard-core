@@ -76,37 +76,46 @@ public static class PostRoutes
                     var pascalKey = ToPascalCase(kvp.Key);
                     var value = kvp.Value;
 
-                    // Handle "items" field - this should become BagPart
-                    if (kvp.Key == "items" && value is JsonElement itemsElement && itemsElement.ValueKind == JsonValueKind.Array)
+                    // Handle BagPart fields - detect arrays with objects that have "contentType" property
+                    // Supports both "items" (default BagPart) and named BagParts like "step", "ingredients", etc.
+                    if (value is JsonElement jsonArrayElement && jsonArrayElement.ValueKind == JsonValueKind.Array)
                     {
-                        var bagItems = new List<object>();
-                        foreach (var item in itemsElement.EnumerateArray())
+                        // Check if first element has contentType property (indicates BagPart items)
+                        var firstElement = jsonArrayElement.EnumerateArray().FirstOrDefault();
+                        if (firstElement.ValueKind == JsonValueKind.Object &&
+                            firstElement.TryGetProperty("contentType", out _))
                         {
-                            if (item.ValueKind == JsonValueKind.Object)
+                            var bagItems = new List<object>();
+                            foreach (var item in jsonArrayElement.EnumerateArray())
                             {
-                                // Get contentType first
-                                string? itemType = null;
-                                if (item.TryGetProperty("contentType", out var ctProp) && ctProp.ValueKind == JsonValueKind.String)
+                                if (item.ValueKind == JsonValueKind.Object)
                                 {
-                                    itemType = ctProp.GetString();
-                                }
+                                    // Get contentType first
+                                    string? itemType = null;
+                                    if (item.TryGetProperty("contentType", out var ctProp) && ctProp.ValueKind == JsonValueKind.String)
+                                    {
+                                        itemType = ctProp.GetString();
+                                    }
 
-                                if (!string.IsNullOrEmpty(itemType))
-                                {
-                                    var bagItem = CreateBagPartItem(item, itemType);
-                                    bagItems.Add(bagItem);
+                                    if (!string.IsNullOrEmpty(itemType))
+                                    {
+                                        var bagItem = CreateBagPartItem(item, itemType);
+                                        bagItems.Add(bagItem);
+                                    }
                                 }
                             }
-                        }
 
-                        if (bagItems.Count > 0)
-                        {
-                            contentItem.Content["BagPart"] = new Dictionary<string, object>
+                            if (bagItems.Count > 0)
                             {
-                                ["ContentItems"] = bagItems
-                            };
+                                // "items" → "BagPart", "step" → "Step", "ingredients" → "Ingredients"
+                                var partName = kvp.Key == "items" ? "BagPart" : pascalKey;
+                                contentItem.Content[partName] = new Dictionary<string, object>
+                                {
+                                    ["ContentItems"] = bagItems
+                                };
+                            }
+                            continue;
                         }
-                        continue;
                     }
 
                     // Handle fields ending with "Id" - these are content item references
