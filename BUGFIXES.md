@@ -572,3 +572,50 @@ $push to named BagPart:
   }
 }
 ```
+
+## Known Limitation: Field Validation Requires Existing Content Item (WON'T FIX FOR NOW), 2025-11-06 10:00
+
+**Issue:** When using POST/PUT endpoints to create/update content for a content type with NO existing items, optional fields or numeric fields with default values may not be accepted. The API works correctly AFTER creating at least one item via the Orchard Core admin interface.
+
+**Root Cause:** The `FieldValidator.cs` uses two approaches to determine which fields are valid for a content type:
+
+1. **If items exist**: Extracts field names from existing content items (lines 13-28)
+2. **If NO items exist**: Creates a temporary item called `"_temp_schema_item"`, extracts its field schema, then deletes it (lines 30-45)
+
+The temporary item approach can miss fields that are:
+- Optional (not initialized on new items)
+- Numeric with default values (may not appear in serialized output)
+- Computed or lazy-loaded fields
+- Fields that require specific initialization logic
+
+**Affected Files:**
+- `backend/RestRoutes/FieldValidator.cs:30-45`: Temporary item creation for schema extraction when no items exist
+
+**Workaround:**
+Create one "template" or "schema" item for each content type via the Orchard Core admin interface:
+1. Navigate to Content → [Your Content Type] → New [Content Type]
+2. Fill in a placeholder title (e.g., `"_template"` or `"_schema_example"`)
+3. Fill in all fields, including optional ones, to establish the full field schema
+4. Save the item
+5. REST API POST/PUT will now work correctly for all fields
+6. Optionally, use a naming convention (e.g., prefix with `"_"`) to make template items easy to filter out in queries
+
+**Alternative Workaround:** Use `?where=title!=_template` in your GET requests to exclude template items from results.
+
+**Technical Notes:**
+- This limitation only affects content types with ZERO existing items
+- Once any item exists (admin-created or REST-created), the REST API extracts the field schema from real items instead of using the temp item approach
+- The temp item `"_temp_schema_item"` is created and immediately deleted during field validation - it never persists in the database
+- Future fix would require a more comprehensive schema extraction method, possibly using Orchard Core's content definition APIs directly instead of relying on item instances
+
+**Example Template Item Naming:**
+```json
+{
+  "title": "_template_Recipe",
+  "description": "Template item for schema - do not delete",
+  "cookTime": 0,
+  "servings": 1
+}
+```
+
+**Reported By:** Team 1 (November 2025)
